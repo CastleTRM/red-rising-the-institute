@@ -3480,7 +3480,7 @@ function campShow(){
 const SHIP_TYPES={
  torch:{name:'TorchShip',hull:90,crew:34,gun:8,range:220,board:6,spd:70},
  ripwing:{name:'RipWing',hull:70,crew:40,gun:6,range:150,board:12,spd:95},
- leech:{name:'LeechCraft',hull:80,crew:48,gun:3,range:120,board:16,spd:82},
+ leech:{name:'LeechCraft',hull:140,crew:48,gun:3,range:120,board:16,spd:104},
  destroyer:{name:'Destroyer',hull:190,crew:64,gun:15,range:300,board:8,spd:48},
  flag:{name:'Flagship',hull:340,crew:180,gun:16,range:280,board:12,spd:40}
 };
@@ -3506,6 +3506,7 @@ function fbSim(dt){
  for(const sp of FB.ships){
   if(sp.dead||sp.hull<=0){sp.dead=true;continue;}
   const T=SHIP_TYPES[sp.type];
+  if(!(sp._latch&&FB.t-sp._latch<0.3))sp._drillT=0; // drill progress resets if the leech loses its grip
   if(sp.crew<=T.crew*0.18&&!sp.rout)sp.rout=true;
   if(sp.side===FB.playerSide&&sp.ord&&!sp.rout){
    if(sp.ord.k==='m'){ const dxo=sp.ord.x-sp.x,dyo=sp.ord.y-sp.y,dm=Math.hypot(dxo,dyo);
@@ -3530,8 +3531,8 @@ function fbSim(dt){
    if(tg._latch&&FB.t-tg._latch<0.5)dmg*=0.22; // a ship under boarding is a prize, not a target: ease fire
    tg.hull-=dmg; sp._shot={to:tg.id,kind:wt.kind,crit:crit}; }
   // boarding: leechcraft drills through the hull and bleeds the crew
-  if(dist<=26){ tg.crew-=sp.board*dt*(sp.type==='leech'?3.4:1.2); if(sp.type==='leech'){ sp._drill=tg.id; tg._boardBy=sp.side; tg._latch=FB.t;
-    if(tg.crew<=0&&!tg.flag&&tg.side!==sp.side){ tg.side=sp.side; tg.crew=Math.max(1,Math.round(tg.crewMax*0.4)); tg.rout=false; tg.tgt=null; tg.ord=null; tg.dead=false; tg._captured=FB.t; } } }
+  if(dist<=26){ tg.crew-=sp.board*dt*(sp.type==='leech'?2.2:1.0); if(sp.type==='leech'&&!tg.flag&&tg.side!==sp.side){ sp._drill=tg.id; tg._boardBy=sp.side; tg._latch=FB.t; tg._drillT=(tg._drillT||0)+dt;
+    if(tg._drillT>=1.4){ tg.side=sp.side; tg.crew=Math.max(1,Math.round(tg.crewMax*0.45)); tg.rout=false; tg.tgt=null; tg.ord=null; tg.dead=false; tg._captured=FB.t; tg._drillT=0; } } }
   if(sp.hull<sp.hullMax*0.35)sp.crew-=sp.hullMax*0.03*dt;
   if(sp.hull<=0){sp.dead=true;}
   else if(sp.crew<=0){
