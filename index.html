@@ -463,7 +463,7 @@ body{ background:radial-gradient(1200px 800px at 50% -10%, #161a26 0%, #0a0c12 6
   <p class="tagline">Twelve houses. One valley. Take their standards, or kneel.</p>
   <div class="laurelline">Omnis vir lupus</div>
   <div class="cards" id="cards"></div>
-  <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn btn-gold" id="btnContinue" style="display:none">Continue Campaign</button><button class="btn" id="btnCreator">Forge Your Own</button><button class="btn btn-sm" id="btnTitleHelp">How to Play</button></div>
+  <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn btn-gold" id="btnContinue" style="display:none">Continue Campaign</button><button class="btn" id="btnCreator">Forge Your Own</button><button class="btn" id="btnVoid">Void Skirmish</button><button class="btn btn-sm" id="btnTitleHelp">How to Play</button></div>
   <p class="smallnote">An unofficial fan project inspired by Pierce Brown's Red Rising novels. All code, writing and artwork here are original. Choose your house, break the others, and carry every standard home.</p>
 </div>
 
@@ -3492,6 +3492,11 @@ function fbSim(dt){
   if(sp.dead||sp.hull<=0){sp.dead=true;continue;}
   const T=SHIP_TYPES[sp.type];
   if(sp.crew<=T.crew*0.18&&!sp.rout)sp.rout=true;
+  if(sp.side===FB.playerSide&&sp.ord&&!sp.rout){
+   if(sp.ord.k==='m'){ const dxo=sp.ord.x-sp.x,dyo=sp.ord.y-sp.y,dm=Math.hypot(dxo,dyo);
+    if(dm>12){ sp.x+=dxo/dm*sp.spd*dt; sp.y+=dyo/dm*sp.spd*dt; continue; } else { sp.ord=null; } }
+   else if(sp.ord.k==='t'){ if(sp.ord.t&&!sp.ord.t.dead&&sp.ord.t.hull>0){ sp.tgt=sp.ord.t; } else { sp.ord=null; } }
+  }
   if(!sp.tgt||sp.tgt.dead||sp.tgt.hull<=0){
    let best=null,bd=1e9;
    for(const e of FB.ships){if(e.side===sp.side||e.dead||e.hull<=0)continue;const dd=Math.hypot(e.x-sp.x,e.y-sp.y);const pri=e.flag?0.7:1;if(dd*pri<bd){bd=dd*pri;best=e;}}
@@ -3534,6 +3539,151 @@ function fbCampaignEngagement(){
  const foePower=1.6+CAMP.rank*0.4;
  const r=fbAutoResolve(fbFleetFor(yourPower,true),fbFleetFor(foePower,true),'A');
  return r.winner==='A';
+}
+/* ============ INTERACTIVE VOID BATTLE (the fleet sim, surfaced) ============ */
+const FB_ART={bg:null,ships:{}};
+(function fbLoadArt(){ try{ if(typeof Image==='undefined')return;
+ FB_ART.bg=new Image(); FB_ART.bg.src='assets/void_bg.webp';
+ ['flag','destroyer','ripwing','leech','torch'].forEach(function(k){var im=new Image();im.src='assets/ship_'+k+'.png';FB_ART.ships[k]=im;});
+}catch(e){soft(e);} })();
+const FB_SIZE={flag:70,destroyer:56,torch:48,ripwing:38,leech:36};
+const FB_COL={A:'#5cc8ff',B:'#ff6a5a'};
+let FBUI={raf:null,sel:new Set(),fx:[],resolve:null,done:false,s:1,ox:0,oy:0,last:0};
+
+function fbBattleStart(fleetA,fleetB,opts){
+ opts=opts||{};
+ return new Promise(function(resolve){
+  fbStartSim(fleetA,fleetB,'A');
+  FB.ttl=opts.title||'Void Engagement';
+  FBUI={raf:null,sel:new Set(),fx:[],resolve:resolve,done:false,s:1,ox:0,oy:0,last:performance.now()};
+  fbBuildOverlay();
+  try{ sfx('open'); }catch(e){}
+  fbLoop();
+ });
+}
+function fbBuildOverlay(){
+ var old=document.getElementById('fbWrap'); if(old)old.remove();
+ var w=document.createElement('div'); w.id='fbWrap';
+ w.style.cssText='position:fixed;inset:0;z-index:400;background:#04050a;display:flex;flex-direction:column;font-family:Barlow Condensed,sans-serif;color:#e9edf6';
+ var bs='background:#0d1420;border:1px solid #26466a;color:#bfe0ff;font-family:JetBrains Mono,monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:7px 12px;border-radius:5px;cursor:pointer';
+ w.innerHTML=
+  '<div style="display:flex;align-items:center;gap:9px;padding:9px 14px;background:linear-gradient(180deg,#0a0f18,#070a10);border-bottom:1px solid #1a2740">'+
+   '<span style="font-family:Cinzel,serif;font-size:17px;letter-spacing:.12em;color:#e8c96a;flex:0 0 auto">'+FB.ttl+'</span>'+
+   '<span style="flex:1"></span>'+
+   '<button id="fbBegin" style="'+bs+';color:#e8c96a;border-color:#8a6e2f">Begin</button>'+
+   '<button id="fbSpeed" style="'+bs+'">1x</button>'+
+   '<button id="fbAll" style="'+bs+'">Select All</button>'+
+   '<button id="fbWith" style="'+bs+';color:#ff9a8a;border-color:#6b2e2e">Withdraw</button>'+
+  '</div>'+
+  '<canvas id="fbcanvas" style="flex:1;width:100%;min-height:0;display:block;cursor:crosshair"></canvas>'+
+  '<div id="fbHint" style="padding:7px 14px;font-size:13px;color:#8fa2bd;background:#070a10;border-top:1px solid #1a2740">Tap a ship of yours to select, an enemy to focus fire, open space to reposition. Press Begin.</div>';
+ document.body.appendChild(w);
+ document.getElementById('fbBegin').onclick=function(){ if(FB.over)return; FB.paused=!FB.paused; this.textContent=FB.paused?'Resume':'Pause'; };
+ document.getElementById('fbSpeed').onclick=function(){ FB.speed=FB.speed>=4?1:FB.speed*2; this.textContent=FB.speed+'x'; };
+ document.getElementById('fbAll').onclick=function(){ FBUI.sel=new Set(fbLiving(FB.playerSide).map(function(s){return s.id;})); };
+ document.getElementById('fbWith').onclick=function(){ if(FB.over)return; FB.over=true; FB.winner=FB.playerSide==='A'?'B':'A'; };
+ var cv=document.getElementById('fbcanvas');
+ cv.addEventListener('pointerdown',fbPointer);
+}
+function fbShipAt(wx,wy){
+ var best=null,bd=1e9;
+ for(var i=0;i<FB.ships.length;i++){ var s=FB.ships[i]; if(s.dead||s.hull<=0)continue;
+  var d=Math.hypot(s.x-wx,s.y-wy); var r=(FB_SIZE[s.type]||40)*0.55; if(d<r&&d<bd){bd=d;best=s;} }
+ return best;
+}
+function fbPointer(e){
+ var cv=document.getElementById('fbcanvas'); if(!cv)return; var rect=cv.getBoundingClientRect();
+ var wx=(e.clientX-rect.left-FBUI.ox)/FBUI.s, wy=(e.clientY-rect.top-FBUI.oy)/FBUI.s;
+ var hit=fbShipAt(wx,wy);
+ if(hit&&hit.side===FB.playerSide){ FBUI.sel=new Set([hit.id]); try{sfx('click');}catch(_){}; return; }
+ if(!FBUI.sel.size)return;
+ FB.ships.forEach(function(s){ if(!FBUI.sel.has(s.id)||s.dead)return;
+  if(hit&&hit.side!==FB.playerSide){ s.ord={k:'t',t:hit}; }
+  else { s.ord={k:'m',x:wx,y:wy}; }
+ });
+ fbSpark(wx,wy,hit?FB_COL.B:'#cfe6ff');
+}
+function fbSpark(x,y,c){ for(var i=0;i<10;i++){var a=Math.random()*6.28,sp=40+Math.random()*70;FBUI.fx.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,t:0,life:0.5,c:c,k:'s'});} }
+function fbBoom(x,y){ FBUI.fx.push({x:x,y:y,t:0,life:0.9,k:'ring',c:'#ffd9a0'});
+ for(var i=0;i<26;i++){var a=Math.random()*6.28,sp=60+Math.random()*180;FBUI.fx.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,t:0,life:0.7+Math.random()*0.5,c:i%3?'#ffb15a':'#ff6a5a',k:'s'});} }
+function fbTickFx(dt){ for(var i=FBUI.fx.length-1;i>=0;i--){var p=FBUI.fx[i];p.t+=dt; if(p.t>=p.life){FBUI.fx.splice(i,1);continue;} if(p.k==='s'){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=0.94;p.vy*=0.94;}} }
+function fbLoop(){
+ FBUI.raf=requestAnimationFrame(fbLoop);
+ var now=performance.now(); var dt=Math.min(0.05,(now-FBUI.last)/1000); FBUI.last=now;
+ if(!FB.paused&&!FB.over){ var steps=Math.max(1,Math.round(FB.speed)); for(var i=0;i<steps;i++){ fbSim(dt);
+   for(var j=0;j<FB.ships.length;j++){var s=FB.ships[j]; if(s.dead&&!s._boom){s._boom=true;fbBoom(s.x,s.y);try{sfx('rout');}catch(_){}}}
+ } }
+ fbTickFx(dt);
+ fbDraw();
+ if(FB.over&&!FBUI.done){ FBUI.done=true; setTimeout(fbResult,750); }
+}
+function fbDraw(){
+ var cv=document.getElementById('fbcanvas'); if(!cv)return;
+ var dpr=window.devicePixelRatio||1; var cw=cv.clientWidth,ch=cv.clientHeight;
+ if(cv.width!==Math.round(cw*dpr)||cv.height!==Math.round(ch*dpr)){cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);}
+ var x=cv.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0);
+ x.fillStyle='#04050a'; x.fillRect(0,0,cw,ch);
+ var s=Math.min(cw/FB.W,ch/FB.H); var ox=(cw-FB.W*s)/2, oy=(ch-FB.H*s)/2; FBUI.s=s;FBUI.ox=ox;FBUI.oy=oy;
+ x.save(); x.translate(ox,oy); x.scale(s,s);
+ // backdrop, cover the field
+ if(FB_ART.bg&&FB_ART.bg.complete&&FB_ART.bg.naturalWidth){ var bw=FB_ART.bg.naturalWidth,bh=FB_ART.bg.naturalHeight; var sc=Math.max(FB.W/bw,FB.H/bh); var dw=bw*sc,dh=bh*sc; x.globalAlpha=1; x.drawImage(FB_ART.bg,(FB.W-dw)/2,(FB.H-dh)/2,dw,dh); }
+ else { x.fillStyle='#080b16'; x.fillRect(0,0,FB.W,FB.H); }
+ // beams and boarding
+ for(var i=0;i<FB.ships.length;i++){ var sp=FB.ships[i]; if(sp.dead||sp.rout||!sp.tgt||sp.tgt.dead)continue;
+  var d=Math.hypot(sp.tgt.x-sp.x,sp.tgt.y-sp.y);
+  if(d<=30){ x.strokeStyle='rgba(150,210,255,'+(0.35+0.3*Math.sin(FB.t*20))+')'; x.lineWidth=2; x.setLineDash([4,4]); x.beginPath(); x.moveTo(sp.x,sp.y); x.lineTo(sp.tgt.x,sp.tgt.y); x.stroke(); x.setLineDash([]); if(Math.random()<0.3)fbSpark((sp.x+sp.tgt.x)/2,(sp.y+sp.tgt.y)/2,'#bfe0ff'); }
+  else if(d<=sp.range){ x.strokeStyle=(sp.side==='A'?'rgba(120,205,255,':'rgba(255,120,100,')+(0.15+0.5*Math.random())+')'; x.lineWidth=sp.gun>12?2.2:1.3; x.beginPath(); x.moveTo(sp.x,sp.y); x.lineTo(sp.tgt.x+rnd(-6,6),sp.tgt.y+rnd(-6,6)); x.stroke(); }
+ }
+ // ships
+ for(var i2=0;i2<FB.ships.length;i2++){ var s2=FB.ships[i2]; if(s2.dead||s2.hull<=0)continue;
+  var sz=FB_SIZE[s2.type]||40; var col=FB_COL[s2.side];
+  x.save(); x.translate(s2.x,s2.y); x.globalAlpha=s2.rout?0.5:1;
+  // underglow
+  var g=x.createRadialGradient(0,0,2,0,0,sz*0.7); g.addColorStop(0,col+'55'); g.addColorStop(1,col+'00'); x.fillStyle=g; x.beginPath(); x.arc(0,0,sz*0.7,0,7); x.fill();
+  var img=FB_ART.ships[s2.type]||FB_ART.ships.torch;
+  if(img&&img.complete&&img.naturalWidth){ var iw=img.naturalWidth,ih=img.naturalHeight; var isc=sz/Math.max(iw,ih); var dw2=iw*isc,dh2=ih*isc; if(s2.side==='B'){x.scale(-1,1);} x.drawImage(img,-dw2/2,-dh2/2,dw2,dh2); if(s2.side==='B'){x.scale(-1,1);} }
+  else { x.fillStyle=col; x.beginPath(); x.moveTo(sz*0.5*(s2.side==='A'?1:-1),0); x.lineTo(-sz*0.4*(s2.side==='A'?1:-1),sz*0.3); x.lineTo(-sz*0.4*(s2.side==='A'?1:-1),-sz*0.3); x.closePath(); x.fill(); }
+  x.globalAlpha=1;
+  // selection ring
+  if(FBUI.sel.has(s2.id)){ x.strokeStyle='#e8c96a'; x.lineWidth=2; x.setLineDash([5,4]); x.beginPath(); x.arc(0,0,sz*0.62,0,7); x.stroke(); x.setLineDash([]); }
+  // flagship marker
+  if(s2.flag){ x.fillStyle=col; x.beginPath(); x.moveTo(0,-sz*0.62); x.lineTo(5,-sz*0.62-8); x.lineTo(-5,-sz*0.62-8); x.closePath(); x.fill(); }
+  // bars
+  var bw2=sz*0.9, bx=-bw2/2, by=sz*0.5+4;
+  x.fillStyle='#000a'; x.fillRect(bx-1,by-1,bw2+2,7);
+  x.fillStyle='#6ee07f'; x.fillRect(bx,by,bw2*Math.max(0,s2.hull/s2.hullMax),3);
+  x.fillStyle='#5aa0ff'; x.fillRect(bx,by+3.5,bw2*Math.max(0,s2.crew/s2.crewMax),2.5);
+  x.restore();
+ }
+ // fx
+ for(var f=0;f<FBUI.fx.length;f++){ var p=FBUI.fx[f]; var k=1-p.t/p.life;
+  if(p.k==='ring'){ x.strokeStyle='rgba(255,200,140,'+k*0.8+')'; x.lineWidth=3*k+1; x.beginPath(); x.arc(p.x,p.y,(1-k)*46+6,0,7); x.stroke(); }
+  else { x.fillStyle=p.c; x.globalAlpha=k; x.fillRect(p.x-1.5,p.y-1.5,3,3); x.globalAlpha=1; } }
+ x.restore();
+ // side strength HUD
+ var la=fbLiving('A').length, lb=fbLiving('B').length;
+ x.fillStyle=FB_COL.A; x.font='13px JetBrains Mono,monospace'; x.textAlign='left'; x.fillText('YOUR FLEET  '+la, 14, ch-14);
+ x.fillStyle=FB_COL.B; x.textAlign='right'; x.fillText(lb+'  ENEMY FLEET', cw-14, ch-14);
+}
+function fbResult(){
+ var win=FB.winner===FB.playerSide;
+ var wrap=document.getElementById('fbWrap'); if(!wrap)return;
+ var ov=document.createElement('div');
+ ov.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,5,10,.72);z-index:10';
+ ov.innerHTML='<div style="text-align:center;max-width:520px;padding:26px 30px;background:linear-gradient(180deg,#0c111c,#080b12);border:1px solid '+(win?'#8a6e2f':'#6b2e2e')+';border-radius:12px">'+
+  '<div style="font-family:JetBrains Mono,monospace;font-size:11px;letter-spacing:.3em;color:#8a8ea0;text-transform:uppercase">Void Engagement</div>'+
+  '<div style="font-family:Cinzel,serif;font-size:30px;letter-spacing:.08em;color:'+(win?'#e8c96a':'#ff9a8a')+';margin:8px 0">'+(win?'THE VOID IS YOURS':'YOUR FLEET IS BROKEN')+'</div>'+
+  '<p style="color:#9aa2b4;font-size:15px">'+(win?'The enemy flag falls dark and their line scatters. ':'Your line is shattered and your flag runs dark. ')+'You hold '+fbLiving(FB.playerSide).length+' ships; they hold '+fbLiving(FB.playerSide==='A'?'B':'A').length+'.</p>'+
+  '<button id="fbDone" style="margin-top:14px;background:#12100a;border:1px solid #8a6e2f;color:#e8c96a;font-family:JetBrains Mono,monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;padding:10px 22px;border-radius:6px;cursor:pointer">Continue</button></div>';
+ wrap.appendChild(ov);
+ document.getElementById('fbDone').onclick=function(){ var res={winner:FB.winner,win:win,survA:fbLiving('A').length,survB:fbLiving('B').length,t:FB.t}; fbTeardown(); if(FBUI.resolve)FBUI.resolve(res); };
+ try{ sfx(win?'win':'lose'); }catch(e){}
+}
+function fbTeardown(){ if(FBUI.raf)cancelAnimationFrame(FBUI.raf); FBUI.raf=null; FB.on=false; var w=document.getElementById('fbWrap'); if(w)w.remove(); }
+function fbSkirmish(){
+ var A=[{type:'destroyer'},{type:'ripwing'},{type:'ripwing'},{type:'leech'},{type:'destroyer'},{type:'flag',flag:true}];
+ var B=[{type:'destroyer'},{type:'torch'},{type:'ripwing'},{type:'leech'},{type:'destroyer'},{type:'flag',flag:true}];
+ fbBattleStart(A,B,{title:'Void Skirmish · The Academy'});
 }
 function campEnd(ending){
  const e=ENDING_TEXT[ending]||ENDING_TEXT.ascend;
@@ -6403,6 +6553,7 @@ function boot(){
  $('#btnWorks').addEventListener('click',showWorks);
  $('#btnDip').addEventListener('click',showDiplomacy);
  $('#btnCreator').addEventListener('click',showCreator);
+ { const _bv=$('#btnVoid'); if(_bv)_bv.addEventListener('click',fbSkirmish); }
  $('#log').addEventListener('click',()=>{if(G&&!G.busy)showChronicle();});
  const sndT=()=>{SND.on=!SND.on;const l=SND.on?'\u266a':'\u00d7';const b1=$('#btnSnd'),b2=$('#btnSnd2');if(b1)b1.textContent=l;if(b2)b2.textContent=l;};
  $('#btnSnd').addEventListener('click',sndT);
