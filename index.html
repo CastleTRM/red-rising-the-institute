@@ -3723,10 +3723,14 @@ function acadStart(){
  var player={node:0,fleet:acadFleet(2.2),name:'Darrow'}; nodes[0].owner='player';
  var rn=['Karnus','Cassius','Antonia'],rc=['#ff6a5a','#e0a04a','#c86ad0'],rivals=[],spots=[13,9,7];
  for(var i=0;i<3;i++){ var sp=spots[i]; rivals.push({id:i,node:sp,fleet:acadFleet(1.9+Math.random()*0.6),name:rn[i],dead:false,col:rc[i]}); nodes[sp].owner='rival'; }
+ // The Iron Rain objective: the Sovereign's fortified moon, held by a garrison legion.
+ var cN={id:N,name:'The Citadel',x:ox+mw/2,y:oy+mh/2+rnd(-10,10),base:false,owner:'sovereign',citadel:true,r:22,links:[]};
+ (function(){ var d=[]; for(var j=0;j<N;j++)d.push([Math.hypot(cN.x-nodes[j].x,cN.y-nodes[j].y),j]); d.sort(function(a,b){return a[0]-b[0];}); for(var m=0;m<2;m++){ var j=d[m][1]; cN.links.push(j); if(nodes[j].links.indexOf(N)<0)nodes[j].links.push(N); } })();
+ nodes.push(cN);
  var stars=[]; for(var i=0;i<220;i++)stars.push({x:Math.random()*1300,y:Math.random()*720,r:Math.random()*1.4+0.2,a:Math.random()*0.7+0.2});
  ACAD={on:true,turn:1,over:false,win:false,busy:false,nodes:nodes,player:player,rivals:rivals,stars:stars,hover:-1,raf:null,W:1300,H:720,s:1,ox:0,oy:0,
   patron:pick(['House Augustus','House Bellona','House Telemanus','House Arcos','House Julii']),fav:55,kills:0,rigged:false,severed:false,endReason:'',
-  msg:'Jump to a linked asteroid. Take the supply bases (ringed gold), hunt the rival cadets, and rise. Win the field, or win your patron’s favour.'};
+  msg:'Jump to a linked asteroid. Take the supply bases (ringed gold), hunt the rival cadets, and rise. The Citadel (ringed red) is the Sovereign’s fortified moon: break its blockade in the void, then call down the Iron Rain and storm it on the ground.'};
  if(INSTITUTE_RECORD){ var rec=INSTITUTE_RECORD; ACAD.fromInstitute=rec;
   ACAD.fav=clamp(55+Math.round(((rec.honour||50)-50)*0.4)+(rec.route==='olympus'?12:6),34,84);
   var bonus=(rec.route==='olympus'||(rec.honour||50)>=70)?2:1;
@@ -3759,7 +3763,7 @@ function acadBuildOverlay(){
 function acadPt(e){ var cv=document.getElementById('acadCv'),r=cv.getBoundingClientRect(); return {x:(e.clientX-r.left-ACAD.ox)/ACAD.s,y:(e.clientY-r.top-ACAD.oy)/ACAD.s}; }
 function acadNodeAt(x,y){ for(var i=0;i<ACAD.nodes.length;i++){ var n=ACAD.nodes[i]; if(Math.hypot(n.x-x,n.y-y)<n.r+8)return i; } return -1; }
 function acadClick(e){ if(ACAD.busy||ACAD.over)return; var p=acadPt(e),nid=acadNodeAt(p.x,p.y); if(nid<0)return;
- if(ACAD.nodes[ACAD.player.node].links.indexOf(nid)>=0) acadMoveTo(nid); }
+ if(ACAD.nodes[ACAD.player.node].links.indexOf(nid)>=0){ if(ACAD.nodes[nid].citadel) acadIronRain(); else acadMoveTo(nid); } }
 async function acadMoveTo(target){
  if(ACAD.busy)return; ACAD.busy=true;
  var riv=acadRivalAt(target);
@@ -3773,6 +3777,52 @@ async function acadMoveTo(target){
  if(acadCheckEnd()){ ACAD.busy=false; return; }
  await acadRivalPhase();
  ACAD.busy=false;
+}
+/* ===== The Iron Rain: hold the void, then storm the Citadel on the ground.
+   Blends the fleet engine (void blockade) with the land engine (orbital assault). ===== */
+function acadSovereignFleet(){ var f=[{type:'flag',flag:true},{type:'flag',flag:true}]; var n=8+acadRank(); for(var i=0;i<n;i++)f.push({type:pick(['destroyer','destroyer','ripwing','leech','torch'])}); return f; }
+async function acadGroundAssault(){
+ // The land-battle engine reads only G.houses[hid] (.tech/.nextMorale) and G.weather.
+ // Bootstrap a minimal campaign state if none exists, then restore it afterwards.
+ var attHid=(ACAD.fromInstitute&&ACAD.fromInstitute.house&&HOUSES[ACAD.fromInstitute.house])?ACAD.fromInstitute.house:'mars';
+ var defHid='jupiter';
+ var savedG=G, stub=false;
+ if(!G||!G.houses||!G.houses[attHid]||!G.houses[defHid]){
+  stub=true;
+  G={turn:1,player:attHid,over:false,weather:'clear',houses:Object.assign({},(G&&G.houses)||{})};
+  if(!G.houses[attHid])G.houses[attHid]={tech:{},nextMorale:0};
+  if(!G.houses[defHid])G.houses[defHid]={tech:{},nextMorale:0};
+ }
+ var rk=acadRank(), sc=1+0.14*rk;
+ var att=[ newSquad('vanguard',Math.round(150*sc),attHid), newSquad('howler',Math.round(130*sc),attHid),
+           newSquad('champion',Math.round(70*sc),attHid), newSquad('blade',Math.round(170*sc),attHid),
+           newSquad('bow',Math.round(120*sc),attHid) ];
+ var def=[ newSquad('pike',320,defHid), newSquad('blade',230,defHid), newSquad('bow',190,defHid),
+           newSquad('champion',80,defHid), newSquad('onager',2,defHid) ];
+ var wrap=document.getElementById('acadWrap'); if(wrap)wrap.style.display='none';
+ var res=null;
+ try{ res=await runBattle({attHid:attHid,defHid:defHid,attSquads:att,defSquads:def,terrain:'olympus',tname:'The Citadel',castle:true,walls:2,playerSide:'A'}); }
+ catch(e){ soft(e); }
+ // runBattle's own teardown reveals #screen-campaign; re-hide it and restore the Academy.
+ try{ document.getElementById('screen-campaign').classList.add('hidden'); }catch(e){}
+ try{ document.getElementById('screen-battle').classList.add('hidden'); }catch(e){}
+ if(stub)G=savedG;
+ if(wrap)wrap.style.display='flex';
+ return res;
+}
+async function acadIronRain(){
+ if(ACAD.busy||ACAD.over)return; ACAD.busy=true;
+ // Stage 1 — hold the void: break the Sovereign's blockade.
+ var vres=await fbBattleStart(ACAD.player.fleet.slice(),acadSovereignFleet(),{title:'The Iron Rain · Break the Sovereign’s Blockade'});
+ ACAD.player.fleet=vres.fleetA;
+ if(!vres.win){ acadFav(-12); ACAD.msg='The Sovereign’s wall of steel holds. Your Iron Rain is thrown back into the dark. Rebuild your fleet and strike again.'; if(acadCheckEnd()){ACAD.busy=false;return;} await acadRivalPhase(); ACAD.busy=false; return; }
+ // Stage 2 — call down the Iron Rain: a real ground assault on the Citadel walls.
+ ACAD.msg='The void is yours. Drop pods burn down through the atmosphere: you call the Iron Rain onto the Citadel.';
+ var gres=await acadGroundAssault();
+ if(gres&&gres.winnerSide==='A'){ ACAD.nodes[ACAD.nodes.length-1].owner='player'; ACAD.endReason='ironrain'; acadEnd(true); ACAD.busy=false; return; }
+ acadFav(-15); ACAD.msg='The garrison holds the Citadel walls. Your legion breaks on the stone and falls back to the ships. The Iron Rain will have to fall again.';
+ if(acadCheckEnd()){ACAD.busy=false;return;}
+ await acadRivalPhase(); ACAD.busy=false;
 }
 async function acadRivalPhase(){
  ACAD.busy=true;
@@ -3803,10 +3853,11 @@ function acadCheckEnd(){
 }
 function acadEnd(win){ ACAD.over=true; ACAD.win=win;
  var wrap=document.getElementById('acadWrap'); if(!wrap)return;
- var titles={prestige:'FIRST AMONG EQUALS',conquest:'FLEET COMMANDER',broken:'STRUCK FROM THE ROLLS'};
+ var titles={prestige:'FIRST AMONG EQUALS',conquest:'FLEET COMMANDER',broken:'STRUCK FROM THE ROLLS',ironrain:'THE IRON RAIN'};
  var bodies={prestige:'You did not have to burn every cadet from the sky. Your patron and the Proctors name you the worthiest of the class, and you are made Praetor by acclaim.',
   conquest:'You are the last fleet in the field. The rival cadets are broken, and the Academy raises you to Praetor.',
-  broken:'Your flagship runs dark and your command is broken. The Academy has no place for the beaten.'};
+  broken:'Your flagship runs dark and your command is broken. The Academy has no place for the beaten.',
+  ironrain:'You held the void, then fell from the sky in fire. The Sovereign’s Citadel breaks beneath your Golds and Obsidians, and the walls that had never fallen fall to you. The Academy has not seen its like in a generation. They will remember the cadet who called down the Iron Rain.'};
  var r=ACAD.endReason||(win?'conquest':'broken');
  var ov=document.createElement('div'); ov.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,5,10,.72);z-index:20';
  ov.innerHTML='<div style="text-align:center;max-width:540px;padding:26px 30px;background:linear-gradient(180deg,#0c111c,#080b12);border:1px solid '+(win?'#8a6e2f':'#6b2e2e')+';border-radius:12px">'
@@ -3835,7 +3886,9 @@ function acadDraw(){
  for(var i=0;i<ACAD.nodes.length;i++){ var n=ACAD.nodes[i];
   var rg=x.createRadialGradient(n.x-n.r*0.3,n.y-n.r*0.3,1,n.x,n.y,n.r); rg.addColorStop(0,'#6f6862'); rg.addColorStop(1,'#2b2a28'); x.fillStyle=rg; x.beginPath(); x.arc(n.x,n.y,n.r,0,7); x.fill();
   if(n.base){ x.strokeStyle='#e8c96a'; x.lineWidth=2; x.beginPath(); x.arc(n.x,n.y,n.r+5,0,7); x.stroke(); }
-  if(reach.indexOf(i)>=0&&!ACAD.busy){ x.strokeStyle='rgba(140,210,255,'+(0.45+0.3*Math.sin(Date.now()/300))+')'; x.lineWidth=2; x.beginPath(); x.arc(n.x,n.y,n.r+9,0,7); x.stroke(); }
+  if(n.citadel){ var pz=0.5+0.4*Math.sin(Date.now()/360); x.strokeStyle='rgba(255,90,74,'+pz+')'; x.lineWidth=2.4; x.beginPath(); x.arc(n.x,n.y,n.r+5,0,7); x.stroke(); x.strokeStyle='rgba(255,90,74,'+(pz*0.5)+')'; x.lineWidth=1.4; x.beginPath(); x.arc(n.x,n.y,n.r+11,0,7); x.stroke();
+   x.fillStyle='#ffcf7a'; x.strokeStyle='#5a1410'; x.lineWidth=1; var gy=n.y-2; x.fillRect(n.x-8,gy-4,16,9); x.strokeRect(n.x-8,gy-4,16,9); x.fillRect(n.x-8,gy-9,3,5); x.fillRect(n.x-1.5,gy-9,3,5); x.fillRect(n.x+5,gy-9,3,5); }
+  if(reach.indexOf(i)>=0&&!ACAD.busy){ x.strokeStyle=(n.citadel?'rgba(255,140,120,':'rgba(140,210,255,')+(0.45+0.3*Math.sin(Date.now()/300))+')'; x.lineWidth=2; x.beginPath(); x.arc(n.x,n.y,n.r+(n.citadel?15:9),0,7); x.stroke(); }
   x.fillStyle='#9fb2cd'; x.font='11px JetBrains Mono,monospace'; x.textAlign='center'; x.fillText(n.name,n.x,n.y+n.r+16);
  }
  var drawFleet=function(nid,col,count){ var n=ACAD.nodes[nid],fx=n.x,fy=n.y-n.r-14; x.fillStyle=col; x.strokeStyle='#0009'; x.lineWidth=1; x.beginPath(); x.moveTo(fx,fy-9); x.lineTo(fx-7,fy+5); x.lineTo(fx+7,fy+5); x.closePath(); x.fill(); x.stroke(); x.fillStyle='#fff'; x.font='700 10px JetBrains Mono,monospace'; x.textAlign='center'; x.fillText(count,fx,fy+1.5); };
