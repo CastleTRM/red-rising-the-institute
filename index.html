@@ -3490,7 +3490,7 @@ function fbMake(side,type,x,y,isFlag){
  return {id:uid(),side:side,type:type,x:x,y:y,hull:T.hull,hullMax:T.hull,crew:T.crew,crewMax:T.crew,gun:T.gun,range:T.range,board:T.board,spd:T.spd,tgt:null,rout:false,dead:false,flag:!!isFlag};
 }
 function fbStartSim(fleetA,fleetB,playerSide){
- FB={on:true,over:false,t:0,paused:true,speed:1,ships:[],winner:null,playerSide:playerSide||'A',W:1200,H:680};
+ FB={on:true,over:false,t:0,paused:true,speed:1,ships:[],winner:null,playerSide:playerSide||'A',W:1200,H:680,captures:0};
  let ay=120;for(const spec of fleetA){FB.ships.push(fbMake('A',spec.type,300,ay,spec.flag));ay+=90;if(ay>560)ay=120;}
  let by=120;for(const spec of fleetB){FB.ships.push(fbMake('B',spec.type,900,by,spec.flag));by+=90;if(by>560)by=120;}
  return FB;
@@ -3535,7 +3535,7 @@ function fbSim(dt){
    tg.hull-=dmg; sp._shot={to:tg.id,kind:wt.kind,crit:crit}; }
   // boarding: leechcraft drills through the hull and bleeds the crew
   if(dist<=26){ tg.crew-=sp.board*dt*(sp.type==='leech'?2.2:1.0); if(sp.type==='leech'&&!tg.flag&&tg.side!==sp.side){ sp._drill=tg.id; tg._boardBy=sp.side; tg._latch=FB.t; tg._drillT=(tg._drillT||0)+dt;
-    if(tg._drillT>=1.1){ tg.side=sp.side; tg.crew=Math.max(1,Math.round(tg.crewMax*0.45)); tg.rout=false; tg.tgt=null; tg.ord=null; tg.dead=false; tg._captured=FB.t; tg._drillT=0; } } }
+    if(tg._drillT>=1.1){ tg.side=sp.side; tg.crew=Math.max(1,Math.round(tg.crewMax*0.45)); tg.rout=false; tg.tgt=null; tg.ord=null; tg.dead=false; tg._captured=FB.t; tg._drillT=0; if(sp.side===FB.playerSide)FB.captures=(FB.captures||0)+1; } } }
   if(sp.hull<sp.hullMax*0.35)sp.crew-=sp.hullMax*0.03*dt;
   if(sp.hull<=0){sp.dead=true;}
   else if(sp.crew<=0){
@@ -3730,7 +3730,7 @@ function fbBattleStart(fleetA,fleetB,opts){
  return new Promise(function(resolve){
   fbStartSim(fleetA,fleetB,'A');
   FB.ttl=opts.title||'Void Engagement';
-  FBUI={raf:null,sel:new Set(),fx:[],resolve:resolve,done:false,s:1,ox:0,oy:0,last:performance.now()};
+  FBUI={raf:null,sel:new Set(),fx:[],resolve:resolve,done:false,s:1,ox:0,oy:0,last:performance.now(),groups:{},down:null,box:null};
   fbBuildOverlay();
   FB.use3d=fb3Populate();
   try{ sfx('open'); }catch(e){}
@@ -3762,16 +3762,18 @@ function fbBuildOverlay(){
  document.getElementById('fbSpeed').onclick=function(){ FB.speed=FB.speed>=4?1:FB.speed*2; this.textContent=FB.speed+'x'; };
  document.getElementById('fbAll').onclick=function(){ FBUI.sel=new Set(fbLiving(FB.playerSide).map(function(s){return s.id;})); };
  document.getElementById('fbSpec').onclick=function(){ fbSpecial(); };
- FBUI.keyH=function(e){ if((e.key==='e'||e.key==='E')&&document.getElementById('fbWrap')){ e.preventDefault(); fbSpecial(); } };
+ FBUI.keyH=function(e){ if(!document.getElementById('fbWrap'))return;
+  if(e.key==='e'||e.key==='E'){ e.preventDefault(); fbSpecial(); return; }
+  if(e.key>='1'&&e.key<='9'){ FBUI.groups=FBUI.groups||{}; if(e.ctrlKey||e.metaKey){ e.preventDefault(); FBUI.groups[e.key]=new Set(FBUI.sel); } else if(FBUI.groups[e.key]){ FBUI.sel=new Set(FBUI.groups[e.key]); } } };
  window.addEventListener('keydown',FBUI.keyH);
  document.getElementById('fbWith').onclick=function(){ if(FB.over)return; FB.over=true; FB.winner=FB.playerSide==='A'?'B':'A'; };
  var cv=document.getElementById('fbcanvas');
  cv.addEventListener('pointerdown',fbPointer);
  cv.addEventListener('contextmenu',function(e){e.preventDefault();});
  cv.addEventListener('wheel',function(e){ e.preventDefault(); if(FB3.ready)FB3.camR=clamp(FB3.camR*(1+e.deltaY*0.0013),44,205); },{passive:false});
- cv.addEventListener('pointermove',function(e){ if(FB3._cam&&FB3.ready){ var dx=e.clientX-FB3._cam.x,dy=e.clientY-FB3._cam.y; FB3._cam.x=e.clientX; FB3._cam.y=e.clientY; FB3.camAz-=dx*0.006; FB3.camEl=clamp(FB3.camEl+dy*0.006,0.12,1.46); } });
- window.addEventListener('pointerup',function(){ if(FB3)FB3._cam=null; });
- document.getElementById('fbHint').textContent='Tap a ship to select, an enemy to focus fire, open space to reposition. Right-drag to orbit, scroll to zoom. Press Begin.';
+ cv.addEventListener('pointermove',fbPointerMove);
+ window.addEventListener('pointerup',fbPointerUp); FBUI.upH=fbPointerUp;
+ document.getElementById('fbHint').textContent='Click a ship or drag a box to select · click an enemy to focus fire · open space to move · E special · Ctrl+1-9 set group, 1-9 recall · right-drag orbit, scroll zoom.';
 }
 function fbShipAt(wx,wy){
  var best=null,bd=1e9;
@@ -3785,13 +3787,11 @@ function fbPointer(e){
  var cv=document.getElementById('fbcanvas'); if(!cv)return; var rect=cv.getBoundingClientRect();
  if(FB.use3d&&(e.button===2||e.button===1)){ FB3._cam={x:e.clientX,y:e.clientY}; return; } // right/middle drag orbits the camera
  if(FB.use3d){
-  var cx=e.clientX-rect.left, cy=e.clientY-rect.top, cw=rect.width, ch=rect.height;
+  var cx=e.clientX-rect.left, cy=e.clientY-rect.top;
   var hit=fbShipAtScreen(cx,cy);
-  if(hit&&hit.side===FB.playerSide){ FBUI.sel=new Set([hit.id]); try{sfx('click');}catch(_){}; return; }
-  if(!FBUI.sel.size)return;
-  var mx=600,my=340;
-  if(!(hit&&hit.side!==FB.playerSide)){ if(!_fbRay){_fbRay=new THREE.Raycaster();_fbPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);_fbHit=new THREE.Vector3();} _fbRay.setFromCamera({x:(cx/cw)*2-1,y:-((cy/ch)*2-1)},FB3.cam); if(_fbRay.ray.intersectPlane(_fbPlane,_fbHit)){ mx=clamp(_fbHit.x/FB3.K+600,20,1180); my=clamp(_fbHit.z/FB3.K+340,20,660); } }
-  FB.ships.forEach(function(s){ if(!FBUI.sel.has(s.id)||s.dead)return; if(hit&&hit.side!==FB.playerSide){ s.ord={k:'t',t:hit}; } else { s.ord={k:'m',x:mx,y:my}; } });
+  if(hit&&hit.side===FB.playerSide){ FBUI.sel=new Set([hit.id]); FBUI.down=null; try{sfx('click');}catch(_){}; return; }
+  if(hit&&hit.side!==FB.playerSide&&FBUI.sel.size){ FB.ships.forEach(function(s){ if(FBUI.sel.has(s.id)&&!s.dead)s.ord={k:'t',t:hit}; }); return; }
+  FBUI.down={x:e.clientX,y:e.clientY,cx:cx,cy:cy,moved:false}; // empty space: could be a box-select drag or a move click
   return;
  }
  var wx=(e.clientX-rect.left-FBUI.ox)/FBUI.s, wy=(e.clientY-rect.top-FBUI.oy)/FBUI.s;
@@ -3804,6 +3804,16 @@ function fbPointer(e){
  });
  fbSpark(wx,wy,hit2?FB_COL.B:'#cfe6ff');
 }
+function fbClickToSim(cx,cy){ var cv=document.getElementById('fbcanvas'); if(!cv||!FB3.ready)return {x:600,y:340}; var rect=cv.getBoundingClientRect(); if(!_fbRay){_fbRay=new THREE.Raycaster();_fbPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);_fbHit=new THREE.Vector3();} _fbRay.setFromCamera({x:(cx/rect.width)*2-1,y:-((cy/rect.height)*2-1)},FB3.cam); if(_fbRay.ray.intersectPlane(_fbPlane,_fbHit))return {x:clamp(_fbHit.x/FB3.K+600,20,1180),y:clamp(_fbHit.z/FB3.K+340,20,660)}; return {x:600,y:340}; }
+function fbPointerMove(e){ if(!FB.use3d)return; var cv=document.getElementById('fbcanvas'); if(!cv)return; var rect=cv.getBoundingClientRect();
+ if(FB3._cam&&FB3.ready){ var dx=e.clientX-FB3._cam.x,dy=e.clientY-FB3._cam.y; FB3._cam.x=e.clientX; FB3._cam.y=e.clientY; FB3.camAz-=dx*0.006; FB3.camEl=clamp(FB3.camEl+dy*0.006,0.12,1.46); return; }
+ if(FBUI.down){ if(Math.abs(e.clientX-FBUI.down.x)>6||Math.abs(e.clientY-FBUI.down.y)>6){ FBUI.down.moved=true; FBUI.box={x0:FBUI.down.cx,y0:FBUI.down.cy,x1:e.clientX-rect.left,y1:e.clientY-rect.top}; } } }
+function fbPointerUp(e){ if(FB3)FB3._cam=null; if(!FB.use3d||!FBUI.down){FBUI.down=null;return;}
+ if(FBUI.down.moved&&FBUI.box){ var b=FBUI.box,x0=Math.min(b.x0,b.x1),x1=Math.max(b.x0,b.x1),y0=Math.min(b.y0,b.y1),y1=Math.max(b.y0,b.y1),sel=new Set();
+  fbLiving(FB.playerSide).forEach(function(s){ if(s._sx!=null&&s._sx>=x0&&s._sx<=x1&&s._sy>=y0&&s._sy<=y1)sel.add(s.id); });
+  if(sel.size){FBUI.sel=sel;try{sfx('click');}catch(_){}} }
+ else if(FBUI.sel.size){ var p=fbClickToSim(FBUI.down.cx,FBUI.down.cy); FB.ships.forEach(function(s){ if(FBUI.sel.has(s.id)&&!s.dead)s.ord={k:'m',x:p.x,y:p.y}; }); }
+ FBUI.box=null; FBUI.down=null; }
 function fbSpark(x,y,c){ for(var i=0;i<10;i++){var a=Math.random()*6.28,sp=40+Math.random()*70;FBUI.fx.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,t:0,life:0.5,c:c,k:'s'});} }
 function fbBoom(x,y){ FBUI.fx.push({x:x,y:y,t:0,life:0.9,k:'ring',c:'#ffd9a0'});
  for(var i=0;i<26;i++){var a=Math.random()*6.28,sp=60+Math.random()*180;FBUI.fx.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,t:0,life:0.7+Math.random()*0.5,c:i%3?'#ffb15a':'#ff6a5a',k:'s'});} }
@@ -3883,6 +3893,8 @@ function fbDrawUI(){
   x.fillStyle='#6ee07f'; x.fillRect(sx-half,by,w2*Math.max(0,s.hull/s.hullMax),3);
   x.fillStyle='#5aa0ff'; x.fillRect(sx-half,by+3.3,w2*Math.max(0,s.crew/s.crewMax),2.3);
  }
+ if(FBUI.box){ var bx=Math.min(FBUI.box.x0,FBUI.box.x1),byy=Math.min(FBUI.box.y0,FBUI.box.y1),bw3=Math.abs(FBUI.box.x1-FBUI.box.x0),bh3=Math.abs(FBUI.box.y1-FBUI.box.y0);
+  x.fillStyle='rgba(232,201,106,0.09)'; x.fillRect(bx,byy,bw3,bh3); x.strokeStyle='rgba(232,201,106,0.85)'; x.lineWidth=1.4; x.setLineDash([4,3]); x.strokeRect(bx,byy,bw3,bh3); x.setLineDash([]); }
  var la=fbLiving('A').length, lb=fbLiving('B').length;
  x.fillStyle=FB_COL.A; x.font='13px JetBrains Mono,monospace'; x.textAlign='left'; x.fillText('YOUR FLEET  '+la, 14, ch-14);
  x.fillStyle=FB_COL.B; x.textAlign='right'; x.fillText(lb+'  ENEMY FLEET', cw-14, ch-14);
@@ -3900,11 +3912,11 @@ function fbResult(){
  wrap.appendChild(ov);
  document.getElementById('fbDone').onclick=function(){
   var mk=function(sd){return fbLiving(sd).map(function(s){return {type:s.type,flag:s.flag};});};
-  var res={winner:FB.winner,win:win,survA:fbLiving('A').length,survB:fbLiving('B').length,fleetA:mk('A'),fleetB:mk('B'),t:FB.t};
+  var res={winner:FB.winner,win:win,survA:fbLiving('A').length,survB:fbLiving('B').length,fleetA:mk('A'),fleetB:mk('B'),t:FB.t,captured:FB.captures||0};
   fbTeardown(); if(FBUI.resolve)FBUI.resolve(res); };
  try{ sfx(win?'win':'lose'); }catch(e){}
 }
-function fbTeardown(){ if(FBUI.raf)cancelAnimationFrame(FBUI.raf); FBUI.raf=null; FB.on=false; if(FBUI.keyH)window.removeEventListener('keydown',FBUI.keyH); fb3TeardownGL(); var w=document.getElementById('fbWrap'); if(w)w.remove(); }
+function fbTeardown(){ if(FBUI.raf)cancelAnimationFrame(FBUI.raf); FBUI.raf=null; FB.on=false; if(FBUI.keyH)window.removeEventListener('keydown',FBUI.keyH); if(FBUI.upH)window.removeEventListener('pointerup',FBUI.upH); fb3TeardownGL(); var w=document.getElementById('fbWrap'); if(w)w.remove(); }
 function fbSkirmish(){
  var A=[{type:'destroyer'},{type:'ripwing'},{type:'ripwing'},{type:'leech'},{type:'destroyer'},{type:'flag',flag:true}];
  var B=[{type:'destroyer'},{type:'torch'},{type:'ripwing'},{type:'leech'},{type:'destroyer'},{type:'flag',flag:true}];
@@ -3981,7 +3993,7 @@ async function acadMoveTo(target){
  if(riv){
   var res=await fbBattleStart(ACAD.player.fleet.slice(),riv.fleet.slice(),{title:'Void Battle · '+ACAD.nodes[target].name});
   ACAD.player.fleet=res.fleetA;
-  if(res.win){ riv.dead=true; ACAD.nodes[target].owner='player'; if(ACAD.nodes[ACAD.player.node].owner==='player')ACAD.nodes[ACAD.player.node].owner=null; ACAD.player.node=target; ACAD.msg='You break '+riv.name+"'s fleet and take "+ACAD.nodes[target].name+'.'; ACAD.kills++; acadFav(14); acadRigCheck(); }
+  if(res.win){ riv.dead=true; ACAD.nodes[target].owner='player'; if(ACAD.nodes[ACAD.player.node].owner==='player')ACAD.nodes[ACAD.player.node].owner=null; ACAD.player.node=target; ACAD.msg='You break '+riv.name+"'s fleet and take "+ACAD.nodes[target].name+'.'+(res.captured?' Your leechcraft seize '+res.captured+' enemy hull'+(res.captured>1?'s':'')+', pressed into your service.':''); ACAD.kills++; acadFav(14+(res.captured||0)*2); acadRigCheck(); }
   else { riv.fleet=res.fleetB.length?res.fleetB:riv.fleet; acadFav(-9); ACAD.msg='Thrown back from '+ACAD.nodes[target].name+'. Regroup and try again.'; }
  } else { if(ACAD.nodes[ACAD.player.node].owner==='player')ACAD.nodes[ACAD.player.node].owner=null; ACAD.nodes[target].owner='player'; ACAD.player.node=target; ACAD.msg='Fleet jumps to '+ACAD.nodes[target].name+'.'; }
  acadResupply();
