@@ -3237,14 +3237,16 @@ function endOverlay(won,oly,route){
   sub=oly?'The valley is yours by right of storm.':(won?'All twelve standards hang in your hall.':'The valley forgets the beaten quickly.');
  }
  const win=won||!!route;
+ if(win){ try{ INSTITUTE_RECORD={house:G.player,houseName:hd.name,honour:Math.round(G.honour!=null?G.honour:50),menace:Math.round(G.menace||0),route:(oly?'olympus':(route||'conquest')),turn:G.turn}; if(typeof localStorage!=='undefined')localStorage.setItem('institute-record',JSON.stringify(INSTITUTE_RECORD)); }catch(e){soft(e);} }
  const html='<div class="m-eyebrow">'+(win?'Victory':'Defeat')+'</div>'
   +'<div class="m-title">'+title+'</div>'
   +'<div style="text-align:center;margin:12px 0">'+sigSVG(G.player,64,win?hd.color:'#555b68')+'</div>'
   +'<div class="m-body"><p>'+body+'</p><p class="dimtx">Turn '+roman(G.turn)+' \u00b7 '+sub+'</p></div>'
-  +'<div class="m-btns"><button class="btn btn-gold" id="btnAgain">Play Again</button>'+(win?'<button class="btn" id="btnDraft">Enter the Draft \u00bb</button>':'')+'</div>';
+  +'<div class="m-btns"><button class="btn btn-gold" id="btnAgain">Play Again</button>'+(win?'<button class="btn" id="btnDraft">Enter the Draft \u00bb</button><button class="btn" id="btnToAcad">On to the Academy \u00bb</button>':'')+'</div>';
  showModal(html);
  $('#btnAgain').addEventListener('click',()=>{hideModal();toTitle();});
- if(win){const bd=$('#btnDraft');if(bd)bd.addEventListener('click',()=>{campStart();});}
+ if(win){const bd=$('#btnDraft');if(bd)bd.addEventListener('click',()=>{campStart();});
+  const ba=$('#btnToAcad');if(ba)ba.addEventListener('click',()=>{hideModal();acadStart();});}
 }
 function vpRow(label,pct,met,note){
  const pc=Math.round(clamp(pct,0,1)*100);
@@ -3700,6 +3702,9 @@ function fbSkirmish(){
 }
 /* ================= THE ACADEMY — asteroid fleet campaign ================= */
 let ACAD=null;
+/* Continuity: a won Institute run is remembered and carried into the Academy. */
+let INSTITUTE_RECORD=null;
+try{ if(typeof localStorage!=='undefined'){ var _ir0=localStorage.getItem('institute-record'); if(_ir0)INSTITUTE_RECORD=JSON.parse(_ir0); } }catch(e){}
 function acadFleet(power){ var f=[],n=3+Math.round(power),pool=['torch','ripwing','leech','destroyer']; for(var i=0;i<n;i++)f.push({type:pick(pool)}); f.push({type:'flag',flag:true}); return f; }
 function acadHasFlag(fl){ for(var i=0;i<fl.length;i++)if(fl[i].flag)return true; return false; }
 function acadRivalAt(nid){ for(var i=0;i<ACAD.rivals.length;i++)if(!ACAD.rivals[i].dead&&ACAD.rivals[i].node===nid)return ACAD.rivals[i]; return null; }
@@ -3722,6 +3727,12 @@ function acadStart(){
  ACAD={on:true,turn:1,over:false,win:false,busy:false,nodes:nodes,player:player,rivals:rivals,stars:stars,hover:-1,raf:null,W:1300,H:720,s:1,ox:0,oy:0,
   patron:pick(['House Augustus','House Bellona','House Telemanus','House Arcos','House Julii']),fav:55,kills:0,rigged:false,severed:false,endReason:'',
   msg:'Jump to a linked asteroid. Take the supply bases (ringed gold), hunt the rival cadets, and rise. Win the field, or win your patron’s favour.'};
+ if(INSTITUTE_RECORD){ var rec=INSTITUTE_RECORD; ACAD.fromInstitute=rec;
+  ACAD.fav=clamp(55+Math.round(((rec.honour||50)-50)*0.4)+(rec.route==='olympus'?12:6),34,84);
+  var bonus=(rec.route==='olympus'||(rec.honour||50)>=70)?2:1;
+  for(var _b=0;_b<bonus;_b++)ACAD.player.fleet.splice(Math.max(0,ACAD.player.fleet.length-1),0,{type:pick(['destroyer','ripwing'])});
+  ACAD.msg='Fresh from your triumph at the Institute, you come crowned with the standard of '+(rec.houseName||'your house')+'. Your name opens doors: '+ACAD.patron+' takes you as its Lancer, and your record buys you extra hulls and standing.';
+ }
  acadBuildOverlay(); acadLoop();
 }
 function acadResupply(){ if(ACAD.severed)return; var n=ACAD.nodes[ACAD.player.node]; if(n.base&&ACAD.player.fleet.length<11){ ACAD.player.fleet.push({type:pick(['ripwing','leech','destroyer','torch'])}); acadFav(3); var extra=''; if(ACAD.fav>=78&&ACAD.player.fleet.length<11){ ACAD.player.fleet.push({type:pick(['destroyer','ripwing'])}); extra=' Your patron sends a second hull in favour.'; } ACAD.msg='Supply base at '+n.name+': a ship joins your fleet.'+extra; } }
