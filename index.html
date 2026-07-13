@@ -4717,12 +4717,12 @@ function hex3(h){const n=parseInt(h.slice(1),16);return[((n>>16)&255)/255,((n>>8
    Replaces the box figures in the 3D battle with camera-facing sprite billboards
    cut from the unit concept art. Falls back to boxes if a sprite is missing or the
    toggle is off. Console: INSTITUTE_TROOPS.enabled=false reverts to boxes.        */
-const INSTITUTE_TROOPS={enabled:true,tex:{},aspect:{},_mat:{},
+const INSTITUTE_TROOPS={enabled:true,tex:{},aspect:{},img:{},tint:{},_mat:{},_mat2:{},
  SCALE:{pike:15,blade:15,bow:15,howler:16,captain:16,conscript:13,vanguard:19,champion:20,horse:22,sunrider:22,onager:20}};
 (function troopLoad(){ try{ if(typeof Image==='undefined')return;
  ['pike','blade','bow','horse','conscript','captain','howler','vanguard','sunrider','champion','onager'].forEach(function(t){
   var im=new Image();
-  im.onload=function(){ INSTITUTE_TROOPS.aspect[t]=im.naturalWidth/Math.max(1,im.naturalHeight);
+  im.onload=function(){ INSTITUTE_TROOPS.aspect[t]=im.naturalWidth/Math.max(1,im.naturalHeight); INSTITUTE_TROOPS.img[t]=im;
    try{ if(typeof THREE!=='undefined'){ var tx=new THREE.Texture(im); tx.needsUpdate=true; if(THREE.SRGBColorSpace)tx.colorSpace=THREE.SRGBColorSpace; INSTITUTE_TROOPS.tex[t]=tx; } }catch(e){} };
   im.src='assets/sprites/'+t+'.png';
  });
@@ -4731,6 +4731,38 @@ function troopOn(type){ return !!(INSTITUTE_TROOPS.enabled && INSTITUTE_TROOPS.t
 function troopMat(type){ if(INSTITUTE_TROOPS._mat[type])return INSTITUTE_TROOPS._mat[type];
  var m=new THREE.MeshBasicMaterial({map:INSTITUTE_TROOPS.tex[type],transparent:true,alphaTest:0.42,side:THREE.DoubleSide,depthWrite:true});
  INSTITUTE_TROOPS._mat[type]=m; return m; }
+/* Recolour the neutral cloth (low-saturation cloak/tabard) toward the house colour on a
+   canvas, luminance-preserving, so armour and skin keep their tone. One texture per type+house. */
+function troopTintedTex(type,hid){
+ var key=type+'|'+hid; if(INSTITUTE_TROOPS.tint[key])return INSTITUTE_TROOPS.tint[key];
+ var img=INSTITUTE_TROOPS.img[type]; if(!img||!img.complete||!img.naturalWidth)return null;
+ try{
+  var c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight;
+  var x=c.getContext('2d'); x.drawImage(img,0,0);
+  var hc=hex3((HOUSES[hid]||HOUSES.neutral).color); var hr=hc[0]*255,hg=hc[1]*255,hb=hc[2]*255;
+  var hl=(0.299*hr+0.587*hg+0.114*hb)||1;
+  var d=x.getImageData(0,0,c.width,c.height),p=d.data;
+  for(var i=0;i<p.length;i+=4){
+   if(p[i+3]<200)continue;   /* only recolour solid character pixels; faint backdrop edges stay neutral and get culled by alphaTest */
+   var r=p[i],g=p[i+1],b=p[i+2];
+   var mx=Math.max(r,g,b),mn=Math.min(r,g,b),sat=mx===0?0:(mx-mn)/mx,lum=0.299*r+0.587*g+0.114*b;
+   if(sat<0.30&&lum>42&&lum<226){
+    var w=(0.30-sat)/0.30*0.82, f=lum/hl;
+    var tr=Math.min(255,hr*f),tg=Math.min(255,hg*f),tb=Math.min(255,hb*f);
+    p[i]=r+(tr-r)*w; p[i+1]=g+(tg-g)*w; p[i+2]=b+(tb-b)*w;
+   }
+  }
+  x.putImageData(d,0,0);
+  var tx=new THREE.CanvasTexture(c); if(THREE.SRGBColorSpace)tx.colorSpace=THREE.SRGBColorSpace; tx.needsUpdate=true;
+  INSTITUTE_TROOPS.tint[key]=tx; return tx;
+ }catch(e){soft(e);return null;}
+}
+function troopMatFor(type,hid){
+ var key=type+'|'+hid; if(INSTITUTE_TROOPS._mat2[key])return INSTITUTE_TROOPS._mat2[key];
+ var tex=troopTintedTex(type,hid)||INSTITUTE_TROOPS.tex[type];
+ var m=new THREE.MeshBasicMaterial({map:tex,transparent:true,alphaTest:0.42,side:THREE.DoubleSide,depthWrite:true});
+ INSTITUTE_TROOPS._mat2[key]=m; return m;
+}
 function troopGeo(){ if(!B3.billGeo){ B3.billGeo=new THREE.PlaneGeometry(1,1); B3.billGeo.translate(0,0.5,0); } return B3.billGeo; }
 function b3Geo(type,kit,hid){
  kit=kit||{};
@@ -5098,7 +5130,7 @@ function b3SetupBattle(){
   if(u.kit&&u.kit.pulsearmor)mat.emissive.setRGB(0.05,0.07,0.12);
   if(u.grav)mat.emissive.setRGB(0.04,0.1,0.12);
   const _bill=troopOn(u.type);
-  const inst=_bill?new THREE.InstancedMesh(troopGeo(),troopMat(u.type),44)
+  const inst=_bill?new THREE.InstancedMesh(troopGeo(),troopMatFor(u.type,u.hid),44)
                   :new THREE.InstancedMesh(b3Geo(u.type,u.kit,u.hid),mat,44);
   inst.frustumCulled=false;
   B3.unitGrp.add(inst);
