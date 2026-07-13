@@ -3703,6 +3703,11 @@ let ACAD=null;
 function acadFleet(power){ var f=[],n=3+Math.round(power),pool=['torch','ripwing','leech','destroyer']; for(var i=0;i<n;i++)f.push({type:pick(pool)}); f.push({type:'flag',flag:true}); return f; }
 function acadHasFlag(fl){ for(var i=0;i<fl.length;i++)if(fl[i].flag)return true; return false; }
 function acadRivalAt(nid){ for(var i=0;i<ACAD.rivals.length;i++)if(!ACAD.rivals[i].dead&&ACAD.rivals[i].node===nid)return ACAD.rivals[i]; return null; }
+const ACAD_RANKS=['Cadet','Lancer','Sub-Praetor','Praetor','Imperator'];
+function acadRank(){ var f=ACAD.fav; return f<38?0:f<58?1:f<74?2:f<90?3:4; }
+function acadFav(delta,reason){ ACAD.fav=clamp(ACAD.fav+delta,0,100); if(reason)ACAD.msg=reason;
+ if(ACAD.fav<=0&&!ACAD.severed){ ACAD.severed=true; ACAD.msg='Your patron severs you. No more supply from '+ACAD.patron+', no more shield. Win the field alone, or fall.'; } }
+function acadRigCheck(){ if(ACAD.kills===2&&!ACAD.rigged){ ACAD.rigged=true; acadFav(-22,'The Sovereign fears your rise. Her hand moves against you in the Academy courts, and your favour falls hard. Doing everything right was never enough.'); } }
 function acadStart(){
  var names=['Ceres','Vesta','Pallas','Hygiea','Juno','Astraea','Hebe','Iris','Metis','Flora','Eunomia','Psyche','Egeria','Nemesis'];
  var N=14,nodes=[],cols=5,mw=1120,mh=520,ox=90,oy=110;
@@ -3714,10 +3719,12 @@ function acadStart(){
  var rn=['Karnus','Cassius','Antonia'],rc=['#ff6a5a','#e0a04a','#c86ad0'],rivals=[],spots=[13,9,7];
  for(var i=0;i<3;i++){ var sp=spots[i]; rivals.push({id:i,node:sp,fleet:acadFleet(1.9+Math.random()*0.6),name:rn[i],dead:false,col:rc[i]}); nodes[sp].owner='rival'; }
  var stars=[]; for(var i=0;i<220;i++)stars.push({x:Math.random()*1300,y:Math.random()*720,r:Math.random()*1.4+0.2,a:Math.random()*0.7+0.2});
- ACAD={on:true,turn:1,over:false,win:false,busy:false,nodes:nodes,player:player,rivals:rivals,stars:stars,hover:-1,raf:null,W:1300,H:720,s:1,ox:0,oy:0,msg:'Jump to a linked asteroid. Take the supply bases (ringed gold), hunt the rival cadets, be the last fleet in the field.'};
+ ACAD={on:true,turn:1,over:false,win:false,busy:false,nodes:nodes,player:player,rivals:rivals,stars:stars,hover:-1,raf:null,W:1300,H:720,s:1,ox:0,oy:0,
+  patron:pick(['House Augustus','House Bellona','House Telemanus','House Arcos','House Julii']),fav:55,kills:0,rigged:false,severed:false,endReason:'',
+  msg:'Jump to a linked asteroid. Take the supply bases (ringed gold), hunt the rival cadets, and rise. Win the field, or win your patron’s favour.'};
  acadBuildOverlay(); acadLoop();
 }
-function acadResupply(){ var n=ACAD.nodes[ACAD.player.node]; if(n.base&&ACAD.player.fleet.length<10){ ACAD.player.fleet.push({type:pick(['ripwing','leech','destroyer','torch'])}); ACAD.msg='Supply base at '+n.name+': a ship joins your fleet.'; } }
+function acadResupply(){ if(ACAD.severed)return; var n=ACAD.nodes[ACAD.player.node]; if(n.base&&ACAD.player.fleet.length<11){ ACAD.player.fleet.push({type:pick(['ripwing','leech','destroyer','torch'])}); acadFav(3); var extra=''; if(ACAD.fav>=78&&ACAD.player.fleet.length<11){ ACAD.player.fleet.push({type:pick(['destroyer','ripwing'])}); extra=' Your patron sends a second hull in favour.'; } ACAD.msg='Supply base at '+n.name+': a ship joins your fleet.'+extra; } }
 function acadBuildOverlay(){
  var old=document.getElementById('acadWrap'); if(old)old.remove();
  var w=document.createElement('div'); w.id='acadWrap';
@@ -3748,8 +3755,8 @@ async function acadMoveTo(target){
  if(riv){
   var res=await fbBattleStart(ACAD.player.fleet.slice(),riv.fleet.slice(),{title:'Void Battle · '+ACAD.nodes[target].name});
   ACAD.player.fleet=res.fleetA;
-  if(res.win){ riv.dead=true; ACAD.nodes[target].owner='player'; if(ACAD.nodes[ACAD.player.node].owner==='player')ACAD.nodes[ACAD.player.node].owner=null; ACAD.player.node=target; ACAD.msg='You break '+riv.name+"'s fleet and take "+ACAD.nodes[target].name+'.'; }
-  else { riv.fleet=res.fleetB.length?res.fleetB:riv.fleet; ACAD.msg='Thrown back from '+ACAD.nodes[target].name+'. Regroup and try again.'; }
+  if(res.win){ riv.dead=true; ACAD.nodes[target].owner='player'; if(ACAD.nodes[ACAD.player.node].owner==='player')ACAD.nodes[ACAD.player.node].owner=null; ACAD.player.node=target; ACAD.msg='You break '+riv.name+"'s fleet and take "+ACAD.nodes[target].name+'.'; ACAD.kills++; acadFav(14); acadRigCheck(); }
+  else { riv.fleet=res.fleetB.length?res.fleetB:riv.fleet; acadFav(-9); ACAD.msg='Thrown back from '+ACAD.nodes[target].name+'. Regroup and try again.'; }
  } else { if(ACAD.nodes[ACAD.player.node].owner==='player')ACAD.nodes[ACAD.player.node].owner=null; ACAD.nodes[target].owner='player'; ACAD.player.node=target; ACAD.msg='Fleet jumps to '+ACAD.nodes[target].name+'.'; }
  acadResupply();
  if(acadCheckEnd()){ ACAD.busy=false; return; }
@@ -3766,8 +3773,8 @@ async function acadRivalPhase(){
   if(best===ACAD.player.node){
    var res=await fbBattleStart(ACAD.player.fleet.slice(),rv.fleet.slice(),{title:rv.name+' falls on you · '+ACAD.nodes[best].name});
    ACAD.player.fleet=res.fleetA;
-   if(res.win){ rv.dead=true; ACAD.msg='You beat off '+rv.name+"'s attack."; }
-   else { rv.fleet=res.fleetB.length?res.fleetB:rv.fleet; if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; ACAD.nodes[best].owner='rival';
+   if(res.win){ rv.dead=true; ACAD.kills++; acadFav(9); ACAD.msg='You beat off '+rv.name+"'s attack."; acadRigCheck(); }
+   else { acadFav(-9); rv.fleet=res.fleetB.length?res.fleetB:rv.fleet; if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; ACAD.nodes[best].owner='rival';
      var esc=pn.links.filter(function(x){return !acadRivalAt(x)&&x!==best;}); if(esc.length)ACAD.player.node=esc[0]; ACAD.msg=rv.name+' takes '+ACAD.nodes[best].name+' and drives you off.'; }
    if(acadCheckEnd()){ return; }
   } else { if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; if(!ACAD.nodes[best].owner)ACAD.nodes[best].owner='rival'; if(ACAD.nodes[best].base&&rv.fleet.length<10)rv.fleet.push({type:pick(['ripwing','leech','destroyer'])}); }
@@ -3778,17 +3785,24 @@ async function acadRivalPhase(){
 }
 function acadCheckEnd(){
  if(ACAD.over)return true;
- if(!acadHasFlag(ACAD.player.fleet)){ acadEnd(false); return true; }
- if(ACAD.rivals.every(function(r){return r.dead;})){ acadEnd(true); return true; }
+ if(!acadHasFlag(ACAD.player.fleet)){ ACAD.endReason='broken'; acadEnd(false); return true; }
+ if(ACAD.rivals.every(function(r){return r.dead;})){ ACAD.endReason='conquest'; acadEnd(true); return true; }
+ if(ACAD.fav>=95){ ACAD.endReason='prestige'; acadEnd(true); return true; }
  return false;
 }
 function acadEnd(win){ ACAD.over=true; ACAD.win=win;
  var wrap=document.getElementById('acadWrap'); if(!wrap)return;
+ var titles={prestige:'FIRST AMONG EQUALS',conquest:'FLEET COMMANDER',broken:'STRUCK FROM THE ROLLS'};
+ var bodies={prestige:'You did not have to burn every cadet from the sky. Your patron and the Proctors name you the worthiest of the class, and you are made Praetor by acclaim.',
+  conquest:'You are the last fleet in the field. The rival cadets are broken, and the Academy raises you to Praetor.',
+  broken:'Your flagship runs dark and your command is broken. The Academy has no place for the beaten.'};
+ var r=ACAD.endReason||(win?'conquest':'broken');
  var ov=document.createElement('div'); ov.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,5,10,.72);z-index:20';
- ov.innerHTML='<div style="text-align:center;max-width:520px;padding:26px 30px;background:linear-gradient(180deg,#0c111c,#080b12);border:1px solid '+(win?'#8a6e2f':'#6b2e2e')+';border-radius:12px">'
-  +'<div style="font-family:JetBrains Mono,monospace;font-size:11px;letter-spacing:.3em;color:#8a8ea0;text-transform:uppercase">The Academy · '+ACAD.turn+' turns</div>'
-  +'<div style="font-family:Cinzel,serif;font-size:30px;color:'+(win?'#e8c96a':'#ff9a8a')+';margin:8px 0">'+(win?'FLEET COMMANDER':'STRUCK FROM THE ROLLS')+'</div>'
-  +'<p style="color:#9aa2b4;font-size:15px">'+(win?'You are the last cadet standing in the field. The Academy raises you to Praetor.':'Your flagship runs dark and your command is broken. The Academy has no place for the beaten.')+'</p>'
+ ov.innerHTML='<div style="text-align:center;max-width:540px;padding:26px 30px;background:linear-gradient(180deg,#0c111c,#080b12);border:1px solid '+(win?'#8a6e2f':'#6b2e2e')+';border-radius:12px">'
+  +'<div style="font-family:JetBrains Mono,monospace;font-size:11px;letter-spacing:.3em;color:#8a8ea0;text-transform:uppercase">The Academy · '+ACAD.turn+' turns · '+ACAD_RANKS[acadRank()]+'</div>'
+  +'<div style="font-family:Cinzel,serif;font-size:30px;color:'+(win?'#e8c96a':'#ff9a8a')+';margin:8px 0">'+titles[r]+'</div>'
+  +'<p style="color:#9aa2b4;font-size:15px">'+bodies[r]+'</p>'
+  +'<p style="color:#6c7488;font-size:13px;font-family:JetBrains Mono,monospace">In service to '+ACAD.patron+' · Favour '+Math.round(ACAD.fav)+(ACAD.severed?' · Severed':'')+'</p>'
   +'<button id="acadDone" style="margin-top:14px;background:#12100a;border:1px solid #8a6e2f;color:#e8c96a;font-family:JetBrains Mono,monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;padding:10px 22px;border-radius:6px;cursor:pointer">To the Title</button></div>';
  wrap.appendChild(ov);
  document.getElementById('acadDone').onclick=function(){ acadTeardown(); };
@@ -3818,7 +3832,11 @@ function acadDraw(){
  drawFleet(ACAD.player.node,'#5cc8ff',ACAD.player.fleet.length);
  x.restore();
  var alive=ACAD.rivals.filter(function(r){return !r.dead;}).length;
- var te=document.getElementById('acadTurn'); if(te)te.textContent='Turn '+ACAD.turn+'  ·  Your fleet '+ACAD.player.fleet.length+'  ·  Rivals left '+alive;
+ // favour bar (screen space)
+ var bw2=170,bx2=14,by2=16; x.fillStyle='rgba(0,0,0,0.45)'; x.fillRect(bx2-2,by2-2,bw2+4,9);
+ var fc=ACAD.fav<25?'#c1503a':(ACAD.fav<60?'#c9a54a':'#6ea86a'); x.fillStyle=fc; x.fillRect(bx2,by2,bw2*ACAD.fav/100,5);
+ x.fillStyle='#7f8ba0'; x.font='9px JetBrains Mono,monospace'; x.textAlign='left'; x.fillText('FAVOUR OF '+ACAD.patron.toUpperCase()+(ACAD.severed?' · SEVERED':''),bx2,by2+16);
+ var te=document.getElementById('acadTurn'); if(te)te.textContent='Turn '+ACAD.turn+'  ·  '+ACAD_RANKS[acadRank()]+'  ·  Fleet '+ACAD.player.fleet.length+'  ·  Rivals '+alive;
  var me=document.getElementById('acadMsg'); if(me)me.textContent=ACAD.msg;
 }
 function campEnd(ending){
