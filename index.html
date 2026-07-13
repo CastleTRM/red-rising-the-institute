@@ -3940,11 +3940,48 @@ function champAura(){
   }
  }
 }
+/* HIGH GROUND, SOUGHT. The ridge is worth standing on (groundEdge), so the AI now
+   looks for a nearby rise on its way to contact and holds it, instead of walking the
+   flat straight line. Only real rises roughly toward the enemy count, so a band never
+   climbs away from the fight or stalls on open ground.                               */
+function bHiGround(u,ecx,ecy){
+ try{
+  if(typeof b3H!=='function')return null;
+  const cur=b3H(u.x,u.y);
+  const now=Math.hypot(u.x-ecx,u.y-ecy);
+  let best=null,bs=cur+1.5;const R=95;
+  for(let a=0;a<8;a++){const ang=a/8*6.28319;
+   for(const rr of [R*0.55,R]){
+    const px=clamp(u.x+Math.cos(ang)*rr,34,B.W-34);
+    const py=clamp(u.y+Math.sin(ang)*rr,34,B.H-34);
+    if(B.wallSegs&&u.side==='A'&&px<WALLX()&&!B.wallSegs.some(sg=>sg.broken)&&!u.grav)continue;
+    const toPt=Math.hypot(px-ecx,py-ecy);
+    if(toPt>now+40)continue;                 /* never climb away from the fight */
+    const h=b3H(px,py);
+    const s=h-Math.max(0,toPt-now)*0.05;      /* higher is better; lightly penalise drifting off-line */
+    if(s>bs){bs=s;best={x:px,y:py};}
+   }
+  }
+  return best;
+ }catch(e){return null;}
+}
 function battleAI(){
  if(B.over)return;
  const aiSide=B.playerSide==='A'?'B':'A';
+ let ecx=0,ecy=0,en=0;
+ for(const e of B.u){ if(e.side!==aiSide&&bAlive(e)){ecx+=e.x;ecy+=e.y;en++;} }
+ if(en){ecx/=en;ecy/=en;}
  for(const u of B.u){
   if(u.side!==aiSide||!bFighting(u))continue;
+  if(en&&!u.brace&&(u.u.chg||0)<0.8){
+   let nd=1e9; for(const e of B.u){ if(e.side===u.side||!bAlive(e))continue; const d=bDist(u,e); if(d<nd)nd=d; }
+   const wallBlock=(B.wallSegs&&u.side==='A'&&u.x<WALLX()&&!B.wallSegs.some(sg=>sg.broken)&&!u.grav);
+   const seizing=(B.stdPt&&B.capT>0.5&&u.side==='B');
+   if(nd>150&&!wallBlock&&!seizing){
+    const hp=bHiGround(u,ecx,ecy);
+    if(hp){u.tgt=null;u.tx=hp.x;u.ty=hp.y;continue;}
+   }
+  }
   if(u.u.rng>0){
    let near=null,nd=1e9;
    for(const e of B.u){if(e.side===u.side||!bAlive(e))continue;const d=bDist(u,e);if(d<nd){nd=d;near=e;}}
