@@ -3466,11 +3466,11 @@ function campShow(){
 }
 /* ================= FLEET BATTLE ENGINE ================= */
 const SHIP_TYPES={
- torch:{name:'TorchShip',hull:60,crew:30,gun:8,range:220,board:6,spd:70},
- ripwing:{name:'RipWing',hull:45,crew:40,gun:5,range:150,board:15,spd:95},
- leech:{name:'LeechCraft',hull:50,crew:52,gun:3,range:120,board:19,spd:82},
- destroyer:{name:'Destroyer',hull:120,crew:60,gun:16,range:300,board:10,spd:48},
- flag:{name:'Flagship',hull:200,crew:100,gun:14,range:280,board:16,spd:40}
+ torch:{name:'TorchShip',hull:90,crew:34,gun:8,range:220,board:6,spd:70},
+ ripwing:{name:'RipWing',hull:70,crew:40,gun:6,range:150,board:12,spd:95},
+ leech:{name:'LeechCraft',hull:80,crew:48,gun:3,range:120,board:16,spd:82},
+ destroyer:{name:'Destroyer',hull:190,crew:64,gun:15,range:300,board:8,spd:48},
+ flag:{name:'Flagship',hull:340,crew:180,gun:16,range:280,board:12,spd:40}
 };
 let FB={on:false};
 function fbMake(side,type,x,y,isFlag){
@@ -3509,7 +3509,7 @@ function fbSim(dt){
   const desired=wantBoard?22:sp.range*0.8;
   if(dist>desired){const ang=Math.atan2(tg.y-sp.y,tg.x-sp.x);sp.x+=Math.cos(ang)*sp.spd*dt;sp.y+=Math.sin(ang)*sp.spd*dt;}
   if(dist<=sp.range)tg.hull-=sp.gun*dt;
-  if(dist<=30)tg.crew-=sp.board*dt*2.1;
+  if(dist<=30)tg.crew-=sp.board*dt*0.9;
   if(sp.hull<sp.hullMax*0.4)sp.crew-=sp.hullMax*0.02*dt;
   if(sp.hull<=0){sp.dead=true;}
   if(sp.crew<=0){sp.crew=0;sp.dead=true;}
