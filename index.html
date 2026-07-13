@@ -3527,9 +3527,10 @@ function fbSim(dt){
   sp.reload=(sp.reload==null?Math.random()*0.6:sp.reload)-dt;
   if(!sp.rout&&dist<=sp.range&&sp.reload<=0){ var wt=FB_WPN[sp.type]||FB_WPN.torch; sp.reload=wt.rof*(0.85+Math.random()*0.3);
    var dmg=sp.gun*wt.mul; if(wt.punch&&tg.hullMax<sp.hullMax)dmg*=1.5; var crit=false; if(wt.crit&&Math.random()<wt.crit){dmg*=2.2;crit=true;}
+   if(tg._latch&&FB.t-tg._latch<0.5)dmg*=0.22; // a ship under boarding is a prize, not a target: ease fire
    tg.hull-=dmg; sp._shot={to:tg.id,kind:wt.kind,crit:crit}; }
   // boarding: leechcraft drills through the hull and bleeds the crew
-  if(dist<=26){ tg.crew-=sp.board*dt*1.6; if(sp.type==='leech'){ sp._drill=tg.id; tg._boardBy=sp.side; tg._latch=FB.t;
+  if(dist<=26){ tg.crew-=sp.board*dt*(sp.type==='leech'?3.4:1.2); if(sp.type==='leech'){ sp._drill=tg.id; tg._boardBy=sp.side; tg._latch=FB.t;
     if(tg.crew<=0&&!tg.flag&&tg.side!==sp.side){ tg.side=sp.side; tg.crew=Math.max(1,Math.round(tg.crewMax*0.4)); tg.rout=false; tg.tgt=null; tg.ord=null; tg.dead=false; tg._captured=FB.t; } } }
   if(sp.hull<sp.hullMax*0.35)sp.crew-=sp.hullMax*0.03*dt;
   if(sp.hull<=0){sp.dead=true;}
