@@ -3515,7 +3515,7 @@ function fbSim(dt){
   }
   if(!sp.tgt||sp.tgt.dead||sp.tgt.hull<=0){
    let best=null,bd=1e9;
-   for(const e of FB.ships){if(e.side===sp.side||e.dead||e.hull<=0)continue;const dd=Math.hypot(e.x-sp.x,e.y-sp.y);const pri=e.flag?0.7:1;if(dd*pri<bd){bd=dd*pri;best=e;}}
+   for(const e of FB.ships){if(e.side===sp.side||e.dead||e.hull<=0)continue;const dd=Math.hypot(e.x-sp.x,e.y-sp.y);const pri=(sp.type==='leech')?(e.flag?2.6:0.8):(e.flag?0.7:1);if(dd*pri<bd){bd=dd*pri;best=e;}} // leeches hunt capturable prizes, not the flag
    sp.tgt=best;
   }
   const tg=sp.tgt;if(!tg){continue;}
