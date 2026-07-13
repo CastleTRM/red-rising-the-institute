@@ -4713,6 +4713,25 @@ function mergeGeos(list,cols){
  return out;
 }
 function hex3(h){const n=parseInt(h.slice(1),16);return[((n>>16)&255)/255,((n>>8)&255)/255,(n&255)/255];}
+/* ===== INSTITUTE_TROOPS: photoreal billboard soldiers (Phase 0) =====
+   Replaces the box figures in the 3D battle with camera-facing sprite billboards
+   cut from the unit concept art. Falls back to boxes if a sprite is missing or the
+   toggle is off. Console: INSTITUTE_TROOPS.enabled=false reverts to boxes.        */
+const INSTITUTE_TROOPS={enabled:true,tex:{},aspect:{},_mat:{},
+ SCALE:{pike:15,blade:15,bow:15,howler:16,captain:16,conscript:13,vanguard:19,champion:20,horse:22,sunrider:22,onager:20}};
+(function troopLoad(){ try{ if(typeof Image==='undefined')return;
+ ['pike','blade','bow','horse','conscript','captain','howler','vanguard','sunrider','champion','onager'].forEach(function(t){
+  var im=new Image();
+  im.onload=function(){ INSTITUTE_TROOPS.aspect[t]=im.naturalWidth/Math.max(1,im.naturalHeight);
+   try{ if(typeof THREE!=='undefined'){ var tx=new THREE.Texture(im); tx.needsUpdate=true; if(THREE.SRGBColorSpace)tx.colorSpace=THREE.SRGBColorSpace; INSTITUTE_TROOPS.tex[t]=tx; } }catch(e){} };
+  im.src='assets/sprites/'+t+'.png';
+ });
+}catch(e){soft(e);} })();
+function troopOn(type){ return !!(INSTITUTE_TROOPS.enabled && INSTITUTE_TROOPS.tex[type]); }
+function troopMat(type){ if(INSTITUTE_TROOPS._mat[type])return INSTITUTE_TROOPS._mat[type];
+ var m=new THREE.MeshBasicMaterial({map:INSTITUTE_TROOPS.tex[type],transparent:true,alphaTest:0.42,side:THREE.DoubleSide,depthWrite:true});
+ INSTITUTE_TROOPS._mat[type]=m; return m; }
+function troopGeo(){ if(!B3.billGeo){ B3.billGeo=new THREE.PlaneGeometry(1,1); B3.billGeo.translate(0,0.5,0); } return B3.billGeo; }
 function b3Geo(type,kit,hid){
  kit=kit||{};
  if(!B3.geoCache)B3.geoCache={};
@@ -5078,7 +5097,9 @@ function b3SetupBattle(){
   const mat=new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true});
   if(u.kit&&u.kit.pulsearmor)mat.emissive.setRGB(0.05,0.07,0.12);
   if(u.grav)mat.emissive.setRGB(0.04,0.1,0.12);
-  const inst=new THREE.InstancedMesh(b3Geo(u.type,u.kit,u.hid),mat,44);
+  const _bill=troopOn(u.type);
+  const inst=_bill?new THREE.InstancedMesh(troopGeo(),troopMat(u.type),44)
+                  :new THREE.InstancedMesh(b3Geo(u.type,u.kit,u.hid),mat,44);
   inst.frustumCulled=false;
   B3.unitGrp.add(inst);
   const grp=new THREE.Group();
@@ -5098,7 +5119,7 @@ function b3SetupBattle(){
   el.innerHTML='<i><b style="background:'+hd.color+'"></b></i><i><b style="background:#7fa8d9"></b></i>';
   $('#blabels3d').appendChild(el);
   const bars=el.querySelectorAll?el.querySelectorAll('b'):[];
-  B3.units.set(u.id,{inst,mat,grp,flag,ringSel:rs,ringBrace:rb,label:{el,mb:bars[0]||el.querySelector('b'),ob:bars[1]||el.querySelector('b')},lastRt:false,machine:mach});
+  B3.units.set(u.id,{inst,mat,grp,flag,ringSel:rs,ringBrace:rb,label:{el,mb:bars[0]||el.querySelector('b'),ob:bars[1]||el.querySelector('b')},lastRt:false,machine:mach,bill:_bill});
  }
  B3.az=B.playerSide==='A'?-Math.PI/2:Math.PI/2;
  B3.pol=1.12;B3.rad=620;B3.tgt.set(0,0,0);
@@ -5148,15 +5169,24 @@ function b3Frame(){
   /* THE ROOT CAUSE. The instances live on B3.unitGrp, not on the squad's group, so
      these matrices are in WORLD space. They were being written with y=0, which put
      every man at sea level while his banner stood on the hill above him.          */
+  let _cy=0,_bw=0,_bh=0;
+  if(rec.bill){ if(!B3._bq){B3._bq=new THREE.Quaternion();B3._UP=new THREE.Vector3(0,1,0);B3._bs=new THREE.Vector3();B3._bp=new THREE.Vector3();}
+   _cy=Math.atan2(B3.cam.position.x-(u.x-600),B3.cam.position.z-(u.y-340));
+   _bh=INSTITUTE_TROOPS.SCALE[u.type]||15; _bw=_bh*(INSTITUTE_TROOPS.aspect[u.type]||0.5);
+   B3._bq.setFromAxisAngle(B3._UP,_cy); }
   for(let i=0;i<show;i++){
    const o=u.offs[i];
    const sx=u.x-o.x*sinF-o.y*cosF;
    const sy=u.y+o.x*cosF-o.y*sinF;
-   B3.M4.makeRotationY(-u.face);
-   if(u.mv){B3.M4b.makeRotationZ(Math.sin(B.t*9+i*1.4)*(u.rout?0.22:0.1));B3.M4.multiply(B3.M4b);}
-   /* each man stands on the ground beneath HIM, in world height, because that is the
-      space these matrices are in                                                    */
-   B3.M4.setPosition(sx-600,b3H(sx,sy)+1.5+hov+(i%2?bob:-bob),sy-340);
+   if(rec.bill){
+    B3._bs.set(_bw,_bh,1);
+    B3._bp.set(sx-600,b3H(sx,sy)+hov+(i%2?bob:-bob),sy-340);
+    B3.M4.compose(B3._bp,B3._bq,B3._bs);
+   }else{
+    B3.M4.makeRotationY(-u.face);
+    if(u.mv){B3.M4b.makeRotationZ(Math.sin(B.t*9+i*1.4)*(u.rout?0.22:0.1));B3.M4.multiply(B3.M4b);}
+    B3.M4.setPosition(sx-600,b3H(sx,sy)+1.5+hov+(i%2?bob:-bob),sy-340);
+   }
    rec.inst.setMatrixAt(i,B3.M4);
   }
   rec.inst.count=show;
