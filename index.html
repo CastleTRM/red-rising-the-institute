@@ -3722,7 +3722,8 @@ function acadStart(){
  [2,6,9,12].forEach(function(bi){nodes[bi].base=true;});
  var player={node:0,fleet:acadFleet(2.2),name:'Darrow'}; nodes[0].owner='player';
  var rn=['Karnus','Cassius','Antonia'],rc=['#ff6a5a','#e0a04a','#c86ad0'],rivals=[],spots=[13,9,7];
- for(var i=0;i<3;i++){ var sp=spots[i]; rivals.push({id:i,node:sp,fleet:acadFleet(1.9+Math.random()*0.6),name:rn[i],dead:false,col:rc[i]}); nodes[sp].owner='rival'; }
+ var rkind=['brute','honour','schemer'],rpow=[2.6,2.0,1.7],rtag=['au Bellona, the brute — he hunts you and lives to break hulls','au Bellona, the honourable — he holds the field and fights fair','au Severus-Julii, the schemer — she steals ground and whispers in the courts'];
+ for(var i=0;i<3;i++){ var sp=spots[i]; rivals.push({id:i,node:sp,fleet:acadFleet(rpow[i]+Math.random()*0.4),name:rn[i],dead:false,col:rc[i],kind:rkind[i],tag:rtag[i],pact:0}); nodes[sp].owner='rival'; }
  // The Iron Rain objective: the Sovereign's fortified moon, held by a garrison legion.
  var cN={id:N,name:'The Citadel',x:ox+mw/2,y:oy+mh/2+rnd(-10,10),base:false,owner:'sovereign',citadel:true,r:22,links:[]};
  (function(){ var d=[]; for(var j=0;j<N;j++)d.push([Math.hypot(cN.x-nodes[j].x,cN.y-nodes[j].y),j]); d.sort(function(a,b){return a[0]-b[0];}); for(var m=0;m<2;m++){ var j=d[m][1]; cN.links.push(j); if(nodes[j].links.indexOf(N)<0)nodes[j].links.push(N); } })();
@@ -3828,25 +3829,90 @@ async function acadIronRain(){
  if(acadCheckEnd()){ACAD.busy=false;return;}
  await acadRivalPhase(); ACAD.busy=false;
 }
+/* Each rival reads the board through their temperament. Karnus hunts, Cassius holds and fights fair,
+   Antonia expands, only strikes when she is winning, and slips away when she is not. */
+function acadRivalTarget(rv){
+ var here=ACAD.nodes[rv.node], pnid=ACAD.player.node, pn=ACAD.nodes[pnid];
+ var mine=rv.fleet.length, pfp=ACAD.player.fleet.length;
+ var links=here.links.filter(function(j){ return j===pnid || !acadRivalAt(j); });
+ if(!links.length)return {best:-1,attack:false};
+ var adj=links.indexOf(pnid)>=0;
+ var toward=function(){ var best=-1,bd=1e9; for(var k=0;k<links.length;k++){ var j=links[k]; if(j===pnid){return pnid;} var dd=Math.hypot(ACAD.nodes[j].x-pn.x,ACAD.nodes[j].y-pn.y); if(dd<bd){bd=dd;best=j;} } return best; };
+ var away=function(){ var best=-1,bd=-1; for(var k=0;k<links.length;k++){ var j=links[k]; if(j===pnid)continue; var dd=Math.hypot(ACAD.nodes[j].x-pn.x,ACAD.nodes[j].y-pn.y); if(dd>bd){bd=dd;best=j;} } return best; };
+ var nearest=function(arr){ if(!arr.length)return -1; var best=-1,bd=1e9; for(var k=0;k<links.length;k++){ var j=links[k]; if(j===pnid)continue; var dd=1e9; for(var a=0;a<arr.length;a++)dd=Math.min(dd,Math.hypot(ACAD.nodes[j].x-arr[a].x,ACAD.nodes[j].y-arr[a].y)); if(dd<bd){bd=dd;best=j;} } return best; };
+ var openBases=ACAD.nodes.filter(function(n){ return n.base&&!n.citadel&&n.owner!=='rival'; });
+ if(rv.pact>0){ rv.pact--; var b0=nearest(openBases); return {best:(b0>=0?b0:(away()>=0?away():toward())),attack:false}; }
+ if(rv.kind==='brute'){ if(adj)return {best:pnid,attack:true}; return {best:toward(),attack:false}; }
+ if(rv.kind==='honour'){ if(adj&&mine>=pfp*0.8)return {best:pnid,attack:true}; var bh=nearest(openBases); if(bh>=0)return {best:bh,attack:false}; return {best:toward(),attack:false}; }
+ // schemer
+ if(adj&&mine>pfp*1.25)return {best:pnid,attack:true};
+ if(adj&&pfp>mine*1.4){ var a=away(); if(a>=0)return {best:a,attack:false}; }
+ var bs=nearest(openBases); if(bs>=0)return {best:bs,attack:false};
+ return {best:toward(),attack:false};
+}
 async function acadRivalPhase(){
  ACAD.busy=true;
  for(var i=0;i<ACAD.rivals.length;i++){
   var rv=ACAD.rivals[i]; if(rv.dead)continue;
-  var here=ACAD.nodes[rv.node], pn=ACAD.nodes[ACAD.player.node], best=-1,bd=1e9;
-  for(var l=0;l<here.links.length;l++){ var j=here.links[l]; if(j!==ACAD.player.node&&acadRivalAt(j))continue; var dd=Math.hypot(ACAD.nodes[j].x-pn.x,ACAD.nodes[j].y-pn.y); if(dd<bd){bd=dd;best=j;} }
-  if(best<0)continue;
-  if(best===ACAD.player.node){
+  var pn=ACAD.nodes[ACAD.player.node];
+  var t=acadRivalTarget(rv), best=t.best; if(best<0)continue;
+  if(t.attack&&best===ACAD.player.node){
    var res=await fbBattleStart(ACAD.player.fleet.slice(),rv.fleet.slice(),{title:rv.name+' falls on you · '+ACAD.nodes[best].name});
    ACAD.player.fleet=res.fleetA;
-   if(res.win){ rv.dead=true; ACAD.kills++; acadFav(9); ACAD.msg='You beat off '+rv.name+"'s attack."; acadRigCheck(); }
+   if(res.win){ rv.dead=true; ACAD.kills++; var bonus=(rv.kind==='honour')?13:9; acadFav(bonus); ACAD.msg='You beat off '+rv.name+"'s attack"+(rv.kind==='honour'?'. He salutes you as his flagship burns, and the Proctors mark your honour.':(rv.kind==='schemer'?'. Her schemes die with her fleet.':'. The brute is broken.')); acadRigCheck(); }
    else { acadFav(-9); rv.fleet=res.fleetB.length?res.fleetB:rv.fleet; if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; ACAD.nodes[best].owner='rival';
      var esc=pn.links.filter(function(x){return !acadRivalAt(x)&&x!==best;}); if(esc.length)ACAD.player.node=esc[0]; ACAD.msg=rv.name+' takes '+ACAD.nodes[best].name+' and drives you off.'; }
    if(acadCheckEnd()){ return; }
-  } else { if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; if(!ACAD.nodes[best].owner)ACAD.nodes[best].owner='rival'; if(ACAD.nodes[best].base&&rv.fleet.length<10)rv.fleet.push({type:pick(['ripwing','leech','destroyer'])}); }
+  } else { if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; if(!ACAD.nodes[best].owner)ACAD.nodes[best].owner='rival'; if(ACAD.nodes[best].base&&rv.fleet.length<10)rv.fleet.push({type:pick(['ripwing','leech','destroyer'])}); if(rv.kind==='brute'&&rv.fleet.length<11&&Math.random()<0.6)rv.fleet.push({type:pick(['destroyer','ripwing'])}); }
  }
  ACAD.turn++;
- acadCheckEnd();
+ if(acadCheckEnd()){ ACAD.busy=false; return; }
+ await acadMaybeEvent();
  ACAD.busy=false;
+}
+/* Between-turn dilemmas: the politics of the Academy, decided by a choice. */
+function acadEvent(ev){
+ return new Promise(function(resolve){
+  var wrap=document.getElementById('acadWrap'); if(!wrap){resolve();return;}
+  var ov=document.createElement('div'); ov.id='acadEventOv'; ov.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,5,10,.74);z-index:22';
+  ov.innerHTML='<div style="text-align:center;max-width:520px;padding:24px 28px;background:linear-gradient(180deg,#0c111c,#080b12);border:1px solid #8a6e2f;border-radius:12px">'
+   +'<div style="font-family:JetBrains Mono,monospace;font-size:11px;letter-spacing:.3em;color:#8a8ea0;text-transform:uppercase">A turn in the courts · '+ACAD_RANKS[acadRank()]+'</div>'
+   +'<div style="font-family:Cinzel,serif;font-size:22px;color:#e8c96a;margin:8px 0">'+ev.title+'</div>'
+   +'<p style="color:#c3cad8;font-size:15px;line-height:1.5">'+ev.text+'</p>'
+   +'<div style="display:flex;gap:10px;justify-content:center;margin-top:18px">'
+   +'<button id="acEvA" style="flex:1;background:#12100a;border:1px solid #8a6e2f;color:#e8c96a;font-family:Barlow Condensed,sans-serif;font-size:15px;padding:11px 14px;border-radius:6px;cursor:pointer">'+ev.a.label+'</button>'
+   +'<button id="acEvB" style="flex:1;background:#0d1420;border:1px solid #26466a;color:#bfe0ff;font-family:Barlow Condensed,sans-serif;font-size:15px;padding:11px 14px;border-radius:6px;cursor:pointer">'+ev.b.label+'</button>'
+   +'</div></div>';
+  wrap.appendChild(ov);
+  var done=function(ch){ try{ch();}catch(e){soft(e);} var o=document.getElementById('acadEventOv'); if(o)o.remove(); resolve(); };
+  document.getElementById('acEvA').onclick=function(){ done(ev.a.run); };
+  document.getElementById('acEvB').onclick=function(){ done(ev.b.run); };
+ });
+}
+function acadDropHull(){ if(ACAD.player.fleet.length>2){ var idx=-1; for(var i=0;i<ACAD.player.fleet.length;i++)if(!ACAD.player.fleet[i].flag){idx=i;break;} if(idx>=0)ACAD.player.fleet.splice(idx,1); } }
+function acadEventPool(){
+ var pool=[];
+ pool.push({title:'The Proctor’s Price',text:'A Proctor offers to lose an unflattering dropcount from your record, for a consideration in hulls.',
+  a:{label:'Pay in ships',run:function(){ acadDropHull(); acadFav(7); ACAD.msg='The Proctor pockets a hull and your record shines. Favour rises.'; }},
+  b:{label:'Refuse him',run:function(){ acadFav(3); ACAD.msg='You refuse the Proctor. Word of your spine reaches '+ACAD.patron+'; a little favour comes of it.'; }}});
+ pool.push({title:'A Quiet Offer',text:'A rival sends a coded burst: a truce with you, until the strongest cadet is pulled down.',
+  a:{label:'Accept the pact',run:function(){ var alive=ACAD.rivals.filter(function(r){return !r.dead;}); if(alive.length){ var r=pick(alive); r.pact=2; ACAD.msg=r.name+' honours a quiet truce with you, for a turn or two.'; } else ACAD.msg='There is no one left to treat with.'; }},
+  b:{label:'Stand alone',run:function(){ acadFav(4); ACAD.msg='You treat with no one. '+ACAD.patron+' prizes a cadet who owes nothing. Favour rises.'; }}});
+ pool.push({title:'The Patron Demands',text:ACAD.patron+' demands a show of strength to justify the standard they lend you.',
+  a:{label:'Oblige',run:function(){ acadDropHull(); acadFav(9); ACAD.msg='You burn a hull on a raid staged for the courts. '+ACAD.patron+' is well satisfied.'; }},
+  b:{label:'Decline',run:function(){ acadFav(-5); ACAD.msg='You decline the theatre. '+ACAD.patron+' is displeased, and your favour dips.'; }}});
+ pool.push({title:'Drifting Obsidians',text:'A knot of masterless Obsidians drifts between the camps, looking for a banner to follow.',
+  a:{label:'Take them in',run:function(){ if(ACAD.player.fleet.length<11)ACAD.player.fleet.push({type:pick(['leech','ripwing','destroyer'])}); acadFav(-3); ACAD.msg='You take the Obsidians in. Your fleet grows, though the courts mutter that you buy loyalty.'; }},
+  b:{label:'Send them on',run:function(){ acadFav(4); ACAD.msg='You send them to the Proctors, as custom demands. Favour rises for your correctness.'; }}});
+ return pool;
+}
+async function acadMaybeEvent(){
+ if(ACAD.over||ACAD.turn<2)return;
+ if(ACAD.lastEvent&&(ACAD.turn-ACAD.lastEvent)<2)return;
+ if(Math.random()>0.34)return;
+ ACAD.lastEvent=ACAD.turn;
+ await acadEvent(pick(acadEventPool()));
+ acadCheckEnd();
 }
 function acadCheckEnd(){
  if(ACAD.over)return true;
