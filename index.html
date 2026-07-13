@@ -3491,8 +3491,8 @@ function fbMake(side,type,x,y,isFlag){
 }
 function fbStartSim(fleetA,fleetB,playerSide){
  FB={on:true,over:false,t:0,paused:true,speed:1,ships:[],winner:null,playerSide:playerSide||'A',W:1200,H:680};
- let ay=120;for(const spec of fleetA){FB.ships.push(fbMake('A',spec.type,140,ay,spec.flag));ay+=90;if(ay>560)ay=120;}
- let by=120;for(const spec of fleetB){FB.ships.push(fbMake('B',spec.type,1060,by,spec.flag));by+=90;if(by>560)by=120;}
+ let ay=120;for(const spec of fleetA){FB.ships.push(fbMake('A',spec.type,300,ay,spec.flag));ay+=90;if(ay>560)ay=120;}
+ let by=120;for(const spec of fleetB){FB.ships.push(fbMake('B',spec.type,900,by,spec.flag));by+=90;if(by>560)by=120;}
  return FB;
 }
 function fbLiving(side){return FB.ships.filter(function(s){return s.side===side&&!s.dead&&s.hull>0;});}
@@ -3528,11 +3528,11 @@ function fbSim(dt){
   sp.reload=(sp.reload==null?Math.random()*0.6:sp.reload)-dt;
   if(!sp.rout&&dist<=sp.range&&sp.reload<=0){ var wt=FB_WPN[sp.type]||FB_WPN.torch; sp.reload=wt.rof*(0.85+Math.random()*0.3);
    var dmg=sp.gun*wt.mul; if(wt.punch&&tg.hullMax<sp.hullMax)dmg*=1.5; var crit=false; if(wt.crit&&Math.random()<wt.crit){dmg*=2.2;crit=true;}
-   if(tg._latch&&FB.t-tg._latch<0.5)dmg*=0.22; // a ship under boarding is a prize, not a target: ease fire
+   if(tg._latch&&FB.t-tg._latch<0.5)dmg*=0.05; // a ship under boarding is a prize: allies hold fire while marines take it
    tg.hull-=dmg; sp._shot={to:tg.id,kind:wt.kind,crit:crit}; }
   // boarding: leechcraft drills through the hull and bleeds the crew
   if(dist<=26){ tg.crew-=sp.board*dt*(sp.type==='leech'?2.2:1.0); if(sp.type==='leech'&&!tg.flag&&tg.side!==sp.side){ sp._drill=tg.id; tg._boardBy=sp.side; tg._latch=FB.t; tg._drillT=(tg._drillT||0)+dt;
-    if(tg._drillT>=1.4){ tg.side=sp.side; tg.crew=Math.max(1,Math.round(tg.crewMax*0.45)); tg.rout=false; tg.tgt=null; tg.ord=null; tg.dead=false; tg._captured=FB.t; tg._drillT=0; } } }
+    if(tg._drillT>=1.1){ tg.side=sp.side; tg.crew=Math.max(1,Math.round(tg.crewMax*0.45)); tg.rout=false; tg.tgt=null; tg.ord=null; tg.dead=false; tg._captured=FB.t; tg._drillT=0; } } }
   if(sp.hull<sp.hullMax*0.35)sp.crew-=sp.hullMax*0.03*dt;
   if(sp.hull<=0){sp.dead=true;}
   else if(sp.crew<=0){
