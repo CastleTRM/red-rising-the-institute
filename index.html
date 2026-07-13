@@ -463,7 +463,7 @@ body{ background:radial-gradient(1200px 800px at 50% -10%, #161a26 0%, #0a0c12 6
   <p class="tagline">Twelve houses. One valley. Take their standards, or kneel.</p>
   <div class="laurelline">Omnis vir lupus</div>
   <div class="cards" id="cards"></div>
-  <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn btn-gold" id="btnContinue" style="display:none">Continue Campaign</button><button class="btn" id="btnCreator">Forge Your Own</button><button class="btn" id="btnVoid">Void Skirmish</button><button class="btn btn-sm" id="btnTitleHelp">How to Play</button></div>
+  <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn btn-gold" id="btnContinue" style="display:none">Continue Campaign</button><button class="btn" id="btnCreator">Forge Your Own</button><button class="btn" id="btnVoid">Void Skirmish</button><button class="btn" id="btnAcad">The Academy</button><button class="btn btn-sm" id="btnTitleHelp">How to Play</button></div>
   <p class="smallnote">An unofficial fan project inspired by Pierce Brown's Red Rising novels. All code, writing and artwork here are original. Choose your house, break the others, and carry every standard home.</p>
 </div>
 
@@ -3686,7 +3686,10 @@ function fbResult(){
   '<p style="color:#9aa2b4;font-size:15px">'+(win?'The enemy flag falls dark and their line scatters. ':'Your line is shattered and your flag runs dark. ')+'You hold '+fbLiving(FB.playerSide).length+' ships; they hold '+fbLiving(FB.playerSide==='A'?'B':'A').length+'.</p>'+
   '<button id="fbDone" style="margin-top:14px;background:#12100a;border:1px solid #8a6e2f;color:#e8c96a;font-family:JetBrains Mono,monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;padding:10px 22px;border-radius:6px;cursor:pointer">Continue</button></div>';
  wrap.appendChild(ov);
- document.getElementById('fbDone').onclick=function(){ var res={winner:FB.winner,win:win,survA:fbLiving('A').length,survB:fbLiving('B').length,t:FB.t}; fbTeardown(); if(FBUI.resolve)FBUI.resolve(res); };
+ document.getElementById('fbDone').onclick=function(){
+  var mk=function(sd){return fbLiving(sd).map(function(s){return {type:s.type,flag:s.flag};});};
+  var res={winner:FB.winner,win:win,survA:fbLiving('A').length,survB:fbLiving('B').length,fleetA:mk('A'),fleetB:mk('B'),t:FB.t};
+  fbTeardown(); if(FBUI.resolve)FBUI.resolve(res); };
  try{ sfx(win?'win':'lose'); }catch(e){}
 }
 function fbTeardown(){ if(FBUI.raf)cancelAnimationFrame(FBUI.raf); FBUI.raf=null; FB.on=false; var w=document.getElementById('fbWrap'); if(w)w.remove(); }
@@ -3694,6 +3697,129 @@ function fbSkirmish(){
  var A=[{type:'destroyer'},{type:'ripwing'},{type:'ripwing'},{type:'leech'},{type:'destroyer'},{type:'flag',flag:true}];
  var B=[{type:'destroyer'},{type:'torch'},{type:'ripwing'},{type:'leech'},{type:'destroyer'},{type:'flag',flag:true}];
  fbBattleStart(A,B,{title:'Void Skirmish · The Academy'});
+}
+/* ================= THE ACADEMY — asteroid fleet campaign ================= */
+let ACAD=null;
+function acadFleet(power){ var f=[],n=3+Math.round(power),pool=['torch','ripwing','leech','destroyer']; for(var i=0;i<n;i++)f.push({type:pick(pool)}); f.push({type:'flag',flag:true}); return f; }
+function acadHasFlag(fl){ for(var i=0;i<fl.length;i++)if(fl[i].flag)return true; return false; }
+function acadRivalAt(nid){ for(var i=0;i<ACAD.rivals.length;i++)if(!ACAD.rivals[i].dead&&ACAD.rivals[i].node===nid)return ACAD.rivals[i]; return null; }
+function acadStart(){
+ var names=['Ceres','Vesta','Pallas','Hygiea','Juno','Astraea','Hebe','Iris','Metis','Flora','Eunomia','Psyche','Egeria','Nemesis'];
+ var N=14,nodes=[],cols=5,mw=1120,mh=520,ox=90,oy=110;
+ for(var i=0;i<N;i++){ var c=i%cols,rw=Math.floor(i/cols);
+  nodes.push({id:i,name:names[i],x:ox+c*(mw/(cols-1))+rnd(-32,32),y:oy+rw*(mh/2)+rnd(-28,28),base:false,owner:null,r:15+Math.random()*7,links:[]}); }
+ for(var i=0;i<N;i++){ var d=[]; for(var j=0;j<N;j++){ if(i!==j)d.push([Math.hypot(nodes[i].x-nodes[j].x,nodes[i].y-nodes[j].y),j]); } d.sort(function(a,b){return a[0]-b[0];}); var k=2+Math.floor(Math.random()*2); for(var m=0;m<k;m++){ var j=d[m][1]; if(nodes[i].links.indexOf(j)<0)nodes[i].links.push(j); if(nodes[j].links.indexOf(i)<0)nodes[j].links.push(i); } }
+ [2,6,9,12].forEach(function(bi){nodes[bi].base=true;});
+ var player={node:0,fleet:acadFleet(2.2),name:'Darrow'}; nodes[0].owner='player';
+ var rn=['Karnus','Cassius','Antonia'],rc=['#ff6a5a','#e0a04a','#c86ad0'],rivals=[],spots=[13,9,7];
+ for(var i=0;i<3;i++){ var sp=spots[i]; rivals.push({id:i,node:sp,fleet:acadFleet(1.9+Math.random()*0.6),name:rn[i],dead:false,col:rc[i]}); nodes[sp].owner='rival'; }
+ var stars=[]; for(var i=0;i<220;i++)stars.push({x:Math.random()*1300,y:Math.random()*720,r:Math.random()*1.4+0.2,a:Math.random()*0.7+0.2});
+ ACAD={on:true,turn:1,over:false,win:false,busy:false,nodes:nodes,player:player,rivals:rivals,stars:stars,hover:-1,raf:null,W:1300,H:720,s:1,ox:0,oy:0,msg:'Jump to a linked asteroid. Take the supply bases (ringed gold), hunt the rival cadets, be the last fleet in the field.'};
+ acadBuildOverlay(); acadLoop();
+}
+function acadResupply(){ var n=ACAD.nodes[ACAD.player.node]; if(n.base&&ACAD.player.fleet.length<10){ ACAD.player.fleet.push({type:pick(['ripwing','leech','destroyer','torch'])}); ACAD.msg='Supply base at '+n.name+': a ship joins your fleet.'; } }
+function acadBuildOverlay(){
+ var old=document.getElementById('acadWrap'); if(old)old.remove();
+ var w=document.createElement('div'); w.id='acadWrap';
+ w.style.cssText='position:fixed;inset:0;z-index:390;background:#04050a;display:flex;flex-direction:column;font-family:Barlow Condensed,sans-serif;color:#e9edf6';
+ var bs='background:#0d1420;border:1px solid #26466a;color:#bfe0ff;font-family:JetBrains Mono,monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:7px 12px;border-radius:5px;cursor:pointer';
+ w.innerHTML='<div style="display:flex;align-items:center;gap:9px;padding:9px 14px;background:linear-gradient(180deg,#0a0f18,#070a10);border-bottom:1px solid #1a2740">'
+  +'<span style="font-family:Cinzel,serif;font-size:17px;letter-spacing:.12em;color:#e8c96a">The Academy</span>'
+  +'<span id="acadTurn" style="font-family:JetBrains Mono,monospace;font-size:11px;color:#8fa2bd;margin-left:6px"></span>'
+  +'<span style="flex:1"></span>'
+  +'<button id="acadHold" style="'+bs+'">Hold / Resupply</button>'
+  +'<button id="acadQuit" style="'+bs+';color:#ff9a8a;border-color:#6b2e2e">Leave</button></div>'
+  +'<canvas id="acadCv" style="flex:1;width:100%;min-height:0;display:block;cursor:crosshair"></canvas>'
+  +'<div id="acadMsg" style="padding:7px 14px;font-size:13px;color:#9fb2cd;background:#070a10;border-top:1px solid #1a2740"></div>';
+ document.body.appendChild(w);
+ document.getElementById('acadHold').onclick=function(){ if(ACAD.busy||ACAD.over)return; acadResupply(); acadRivalPhase(); };
+ document.getElementById('acadQuit').onclick=function(){ acadTeardown(); };
+ var cv=document.getElementById('acadCv');
+ cv.addEventListener('pointerdown',acadClick);
+ cv.addEventListener('pointermove',function(e){ var p=acadPt(e); ACAD.hover=acadNodeAt(p.x,p.y); });
+}
+function acadPt(e){ var cv=document.getElementById('acadCv'),r=cv.getBoundingClientRect(); return {x:(e.clientX-r.left-ACAD.ox)/ACAD.s,y:(e.clientY-r.top-ACAD.oy)/ACAD.s}; }
+function acadNodeAt(x,y){ for(var i=0;i<ACAD.nodes.length;i++){ var n=ACAD.nodes[i]; if(Math.hypot(n.x-x,n.y-y)<n.r+8)return i; } return -1; }
+function acadClick(e){ if(ACAD.busy||ACAD.over)return; var p=acadPt(e),nid=acadNodeAt(p.x,p.y); if(nid<0)return;
+ if(ACAD.nodes[ACAD.player.node].links.indexOf(nid)>=0) acadMoveTo(nid); }
+async function acadMoveTo(target){
+ if(ACAD.busy)return; ACAD.busy=true;
+ var riv=acadRivalAt(target);
+ if(riv){
+  var res=await fbBattleStart(ACAD.player.fleet.slice(),riv.fleet.slice(),{title:'Void Battle · '+ACAD.nodes[target].name});
+  ACAD.player.fleet=res.fleetA;
+  if(res.win){ riv.dead=true; ACAD.nodes[target].owner='player'; if(ACAD.nodes[ACAD.player.node].owner==='player')ACAD.nodes[ACAD.player.node].owner=null; ACAD.player.node=target; ACAD.msg='You break '+riv.name+"'s fleet and take "+ACAD.nodes[target].name+'.'; }
+  else { riv.fleet=res.fleetB.length?res.fleetB:riv.fleet; ACAD.msg='Thrown back from '+ACAD.nodes[target].name+'. Regroup and try again.'; }
+ } else { if(ACAD.nodes[ACAD.player.node].owner==='player')ACAD.nodes[ACAD.player.node].owner=null; ACAD.nodes[target].owner='player'; ACAD.player.node=target; ACAD.msg='Fleet jumps to '+ACAD.nodes[target].name+'.'; }
+ acadResupply();
+ if(acadCheckEnd()){ ACAD.busy=false; return; }
+ await acadRivalPhase();
+ ACAD.busy=false;
+}
+async function acadRivalPhase(){
+ ACAD.busy=true;
+ for(var i=0;i<ACAD.rivals.length;i++){
+  var rv=ACAD.rivals[i]; if(rv.dead)continue;
+  var here=ACAD.nodes[rv.node], pn=ACAD.nodes[ACAD.player.node], best=-1,bd=1e9;
+  for(var l=0;l<here.links.length;l++){ var j=here.links[l]; if(j!==ACAD.player.node&&acadRivalAt(j))continue; var dd=Math.hypot(ACAD.nodes[j].x-pn.x,ACAD.nodes[j].y-pn.y); if(dd<bd){bd=dd;best=j;} }
+  if(best<0)continue;
+  if(best===ACAD.player.node){
+   var res=await fbBattleStart(ACAD.player.fleet.slice(),rv.fleet.slice(),{title:rv.name+' falls on you · '+ACAD.nodes[best].name});
+   ACAD.player.fleet=res.fleetA;
+   if(res.win){ rv.dead=true; ACAD.msg='You beat off '+rv.name+"'s attack."; }
+   else { rv.fleet=res.fleetB.length?res.fleetB:rv.fleet; if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; ACAD.nodes[best].owner='rival';
+     var esc=pn.links.filter(function(x){return !acadRivalAt(x)&&x!==best;}); if(esc.length)ACAD.player.node=esc[0]; ACAD.msg=rv.name+' takes '+ACAD.nodes[best].name+' and drives you off.'; }
+   if(acadCheckEnd()){ return; }
+  } else { if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; if(!ACAD.nodes[best].owner)ACAD.nodes[best].owner='rival'; if(ACAD.nodes[best].base&&rv.fleet.length<10)rv.fleet.push({type:pick(['ripwing','leech','destroyer'])}); }
+ }
+ ACAD.turn++;
+ acadCheckEnd();
+ ACAD.busy=false;
+}
+function acadCheckEnd(){
+ if(ACAD.over)return true;
+ if(!acadHasFlag(ACAD.player.fleet)){ acadEnd(false); return true; }
+ if(ACAD.rivals.every(function(r){return r.dead;})){ acadEnd(true); return true; }
+ return false;
+}
+function acadEnd(win){ ACAD.over=true; ACAD.win=win;
+ var wrap=document.getElementById('acadWrap'); if(!wrap)return;
+ var ov=document.createElement('div'); ov.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,5,10,.72);z-index:20';
+ ov.innerHTML='<div style="text-align:center;max-width:520px;padding:26px 30px;background:linear-gradient(180deg,#0c111c,#080b12);border:1px solid '+(win?'#8a6e2f':'#6b2e2e')+';border-radius:12px">'
+  +'<div style="font-family:JetBrains Mono,monospace;font-size:11px;letter-spacing:.3em;color:#8a8ea0;text-transform:uppercase">The Academy · '+ACAD.turn+' turns</div>'
+  +'<div style="font-family:Cinzel,serif;font-size:30px;color:'+(win?'#e8c96a':'#ff9a8a')+';margin:8px 0">'+(win?'FLEET COMMANDER':'STRUCK FROM THE ROLLS')+'</div>'
+  +'<p style="color:#9aa2b4;font-size:15px">'+(win?'You are the last cadet standing in the field. The Academy raises you to Praetor.':'Your flagship runs dark and your command is broken. The Academy has no place for the beaten.')+'</p>'
+  +'<button id="acadDone" style="margin-top:14px;background:#12100a;border:1px solid #8a6e2f;color:#e8c96a;font-family:JetBrains Mono,monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;padding:10px 22px;border-radius:6px;cursor:pointer">To the Title</button></div>';
+ wrap.appendChild(ov);
+ document.getElementById('acadDone').onclick=function(){ acadTeardown(); };
+ try{ sfx(win?'win':'lose'); }catch(e){}
+}
+function acadTeardown(){ if(ACAD&&ACAD.raf)cancelAnimationFrame(ACAD.raf); var w=document.getElementById('acadWrap'); if(w)w.remove(); ACAD=null; }
+function acadLoop(){ if(!ACAD)return; ACAD.raf=requestAnimationFrame(acadLoop); try{acadDraw();}catch(e){soft(e);} }
+function acadDraw(){
+ var cv=document.getElementById('acadCv'); if(!cv||!ACAD)return;
+ var dpr=window.devicePixelRatio||1,cw=cv.clientWidth,ch=cv.clientHeight;
+ if(cv.width!==Math.round(cw*dpr)||cv.height!==Math.round(ch*dpr)){cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);}
+ var x=cv.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0);
+ var g=x.createLinearGradient(0,0,0,ch); g.addColorStop(0,'#080b16'); g.addColorStop(1,'#04050a'); x.fillStyle=g; x.fillRect(0,0,cw,ch);
+ var s=Math.min(cw/ACAD.W,ch/ACAD.H),ox=(cw-ACAD.W*s)/2,oy=(ch-ACAD.H*s)/2; ACAD.s=s;ACAD.ox=ox;ACAD.oy=oy;
+ x.save(); x.translate(ox,oy); x.scale(s,s);
+ for(var i=0;i<ACAD.stars.length;i++){ var st=ACAD.stars[i]; x.fillStyle='rgba(200,214,240,'+st.a+')'; x.fillRect(st.x,st.y,st.r,st.r); }
+ var reach=ACAD.nodes[ACAD.player.node].links;
+ for(var i=0;i<ACAD.nodes.length;i++){ var n=ACAD.nodes[i]; for(var l=0;l<n.links.length;l++){ var j=n.links[l]; if(j<i)continue; var m=ACAD.nodes[j]; var lit=(i===ACAD.player.node||j===ACAD.player.node); x.strokeStyle=lit?'rgba(120,190,255,0.4)':'rgba(90,110,150,0.16)'; x.lineWidth=lit?1.6:1; x.beginPath(); x.moveTo(n.x,n.y); x.lineTo(m.x,m.y); x.stroke(); } }
+ for(var i=0;i<ACAD.nodes.length;i++){ var n=ACAD.nodes[i];
+  var rg=x.createRadialGradient(n.x-n.r*0.3,n.y-n.r*0.3,1,n.x,n.y,n.r); rg.addColorStop(0,'#6f6862'); rg.addColorStop(1,'#2b2a28'); x.fillStyle=rg; x.beginPath(); x.arc(n.x,n.y,n.r,0,7); x.fill();
+  if(n.base){ x.strokeStyle='#e8c96a'; x.lineWidth=2; x.beginPath(); x.arc(n.x,n.y,n.r+5,0,7); x.stroke(); }
+  if(reach.indexOf(i)>=0&&!ACAD.busy){ x.strokeStyle='rgba(140,210,255,'+(0.45+0.3*Math.sin(Date.now()/300))+')'; x.lineWidth=2; x.beginPath(); x.arc(n.x,n.y,n.r+9,0,7); x.stroke(); }
+  x.fillStyle='#9fb2cd'; x.font='11px JetBrains Mono,monospace'; x.textAlign='center'; x.fillText(n.name,n.x,n.y+n.r+16);
+ }
+ var drawFleet=function(nid,col,count){ var n=ACAD.nodes[nid],fx=n.x,fy=n.y-n.r-14; x.fillStyle=col; x.strokeStyle='#0009'; x.lineWidth=1; x.beginPath(); x.moveTo(fx,fy-9); x.lineTo(fx-7,fy+5); x.lineTo(fx+7,fy+5); x.closePath(); x.fill(); x.stroke(); x.fillStyle='#fff'; x.font='700 10px JetBrains Mono,monospace'; x.textAlign='center'; x.fillText(count,fx,fy+1.5); };
+ for(var i=0;i<ACAD.rivals.length;i++){ var rv=ACAD.rivals[i]; if(rv.dead)continue; drawFleet(rv.node,rv.col,rv.fleet.length); }
+ drawFleet(ACAD.player.node,'#5cc8ff',ACAD.player.fleet.length);
+ x.restore();
+ var alive=ACAD.rivals.filter(function(r){return !r.dead;}).length;
+ var te=document.getElementById('acadTurn'); if(te)te.textContent='Turn '+ACAD.turn+'  ·  Your fleet '+ACAD.player.fleet.length+'  ·  Rivals left '+alive;
+ var me=document.getElementById('acadMsg'); if(me)me.textContent=ACAD.msg;
 }
 function campEnd(ending){
  const e=ENDING_TEXT[ending]||ENDING_TEXT.ascend;
@@ -6626,6 +6752,7 @@ function boot(){
  $('#btnDip').addEventListener('click',showDiplomacy);
  $('#btnCreator').addEventListener('click',showCreator);
  { const _bv=$('#btnVoid'); if(_bv)_bv.addEventListener('click',fbSkirmish); }
+ { const _ba=$('#btnAcad'); if(_ba)_ba.addEventListener('click',acadStart); }
  $('#log').addEventListener('click',()=>{if(G&&!G.busy)showChronicle();});
  const sndT=()=>{SND.on=!SND.on;const l=SND.on?'\u266a':'\u00d7';const b1=$('#btnSnd'),b2=$('#btnSnd2');if(b1)b1.textContent=l;if(b2)b2.textContent=l;};
  $('#btnSnd').addEventListener('click',sndT);
