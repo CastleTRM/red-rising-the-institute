@@ -3529,10 +3529,14 @@ function fbSim(dt){
    var dmg=sp.gun*wt.mul; if(wt.punch&&tg.hullMax<sp.hullMax)dmg*=1.5; var crit=false; if(wt.crit&&Math.random()<wt.crit){dmg*=2.2;crit=true;}
    tg.hull-=dmg; sp._shot={to:tg.id,kind:wt.kind,crit:crit}; }
   // boarding: leechcraft drills through the hull and bleeds the crew
-  if(dist<=26){ tg.crew-=sp.board*dt*1.6; if(sp.type==='leech')sp._drill=tg.id; }
+  if(dist<=26){ tg.crew-=sp.board*dt*1.6; if(sp.type==='leech'){ sp._drill=tg.id; tg._boardBy=sp.side; } }
   if(sp.hull<sp.hullMax*0.35)sp.crew-=sp.hullMax*0.03*dt;
   if(sp.hull<=0){sp.dead=true;}
-  if(sp.crew<=0){sp.crew=0;sp.dead=true;}
+  else if(sp.crew<=0){
+   if(sp._boardBy&&sp._boardBy!==sp.side&&!sp.flag){ // boarders take the ship: it flips to the captor's fleet
+    sp.side=sp._boardBy; sp.crew=Math.max(1,Math.round(sp.crewMax*0.4)); sp.rout=false; sp.tgt=null; sp.ord=null; sp._boardBy=null; sp._captured=FB.t; }
+   else { sp.crew=0; sp.dead=true; }
+  }
  }
  const aA=fbLiving('A'),aB=fbLiving('B');
  const fA=fbFlag('A'),fB=fbFlag('B');
@@ -3626,7 +3630,7 @@ function fb3Init(){
   FB3.ren=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true}); FB3.ren.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
   FB3.scene=new THREE.Scene();
   new THREE.TextureLoader().load('assets/void_bg.webp',function(t){ if(FB3.scene)FB3.scene.background=t; },undefined,function(){});
-  FB3.cam=new THREE.PerspectiveCamera(46,16/9,0.5,5000); FB3.cam.position.set(0,44,86); FB3.cam.lookAt(0,0,-2);
+  FB3.cam=new THREE.PerspectiveCamera(46,16/9,0.5,5000); FB3.camTgt=new THREE.Vector3(0,0,0); FB3.camAz=0; FB3.camEl=0.5; FB3.camR=97; FB3._cam=null;
   FB3.scene.add(new THREE.AmbientLight(0x5c6a82,0.95));
   var dir=new THREE.DirectionalLight(0xfff2de,1.15); dir.position.set(34,60,44); FB3.scene.add(dir);
   var rim=new THREE.DirectionalLight(0x4f7bff,0.5); rim.position.set(-44,22,-30); FB3.scene.add(rim);
@@ -3640,7 +3644,7 @@ function fb3Populate(){
  if(!fb3Init())return false;
  if(FB3.shipGrp)FB3.scene.remove(FB3.shipGrp);
  FB3.shipGrp=new THREE.Group(); FB3.scene.add(FB3.shipGrp); FB3.ships=new Map(); FB3.parts=[]; FB3.proj=[];
- for(var i=0;i<FB.ships.length;i++){ var s=FB.ships[i]; var m=fb3BuildShip(s.type,s.side); s._y3=((i%7)-3)*0.85; m.position.set((s.x-600)*FB3.K,s._y3,(s.y-340)*FB3.K); m.rotation.y=(s.side==='A')?0:Math.PI; FB3.shipGrp.add(m); FB3.ships.set(s.id,m); }
+ for(var i=0;i<FB.ships.length;i++){ var s=FB.ships[i]; var m=fb3BuildShip(s.type,s.side); m.userData.side=s.side; s._y3=((i%7)-3)*0.85; m.position.set((s.x-600)*FB3.K,s._y3,(s.y-340)*FB3.K); m.rotation.y=(s.side==='A')?0:Math.PI; FB3.shipGrp.add(m); FB3.ships.set(s.id,m); }
  return true;
 }
 function fb3Explode(pos){
@@ -3673,6 +3677,9 @@ function fb3TickProj(dt){ if(!FB3.proj)return; for(var i=FB3.proj.length-1;i>=0;
 function fb3Sync(dt){
  if(!FB3.ready)return; var K=FB3.K;
  for(var i=0;i<FB.ships.length;i++){ var s=FB.ships[i]; var m=FB3.ships.get(s.id); if(!m)continue;
+  if(m.userData.side!==s.side){ // captured: re-livery the hull to the new owner
+   FB3.shipGrp.remove(m); m.traverse(function(o){ if(o.geometry)o.geometry.dispose(); if(o.material&&o.material.dispose&&!o.material.map)o.material.dispose(); });
+   var nm=fb3BuildShip(s.type,s.side); nm.userData.side=s.side; nm.position.copy(m.position); nm.rotation.copy(m.rotation); FB3.shipGrp.add(nm); FB3.ships.set(s.id,nm); m=nm; fb3Impact(m.position,true); }
   if(s.dead||s.hull<=0){ if(m.visible){ m.visible=false; fb3Explode(m.position); } s._shot=null; s._drill=null; continue; }
   var tx=(s.x-600)*K, tz=(s.y-340)*K, lp=Math.min(1,dt*9);
   m.position.x+=(tx-m.position.x)*lp; m.position.z+=(tz-m.position.z)*lp; m.position.y+=((s._y3||0)-m.position.y)*Math.min(1,dt*4);
@@ -3686,7 +3693,9 @@ function fb3Sync(dt){
  fb3TickProj(dt); fb3TickParts(dt);
  if(FB3.stars)FB3.stars.rotation.y+=dt*0.006;
 }
-function fb3Render(){ var cv=document.getElementById('fbgl'); if(!cv||!FB3.ren)return; var pr=FB3.ren.getPixelRatio(); var w=cv.clientWidth,h=cv.clientHeight; if(cv.width!==Math.round(w*pr)||cv.height!==Math.round(h*pr)){ FB3.ren.setSize(w,h,false); FB3.cam.aspect=w/h; FB3.cam.updateProjectionMatrix(); } FB3.ren.render(FB3.scene,FB3.cam); }
+function fb3Render(){ var cv=document.getElementById('fbgl'); if(!cv||!FB3.ren)return; var pr=FB3.ren.getPixelRatio(); var w=cv.clientWidth,h=cv.clientHeight; if(cv.width!==Math.round(w*pr)||cv.height!==Math.round(h*pr)){ FB3.ren.setSize(w,h,false); FB3.cam.aspect=w/h; FB3.cam.updateProjectionMatrix(); }
+ var ct=FB3.camTgt,ce=FB3.camEl,cr=FB3.camR; FB3.cam.position.set(ct.x+cr*Math.cos(ce)*Math.sin(FB3.camAz), ct.y+cr*Math.sin(ce), ct.z+cr*Math.cos(ce)*Math.cos(FB3.camAz)); FB3.cam.lookAt(ct);
+ FB3.ren.render(FB3.scene,FB3.cam); }
 var _fb3v=null;
 function fb3ProjectShip(m){ if(!_fb3v)_fb3v=new THREE.Vector3(); _fb3v.copy(m.position); _fb3v.project(FB3.cam); return {x:_fb3v.x*0.5+0.5,y:-_fb3v.y*0.5+0.5,behind:_fb3v.z>1}; }
 function fb3TeardownGL(){ if(FB3.ren){ try{FB3.ren.dispose();}catch(e){} } FB3.ready=false; FB3.ren=null; FB3.scene=null; FB3._cv=null; FB3.ships=null; FB3.shipGrp=null; FB3.parts=[]; FB3.proj=[]; FB3._skin=null; }
@@ -3728,6 +3737,11 @@ function fbBuildOverlay(){
  document.getElementById('fbWith').onclick=function(){ if(FB.over)return; FB.over=true; FB.winner=FB.playerSide==='A'?'B':'A'; };
  var cv=document.getElementById('fbcanvas');
  cv.addEventListener('pointerdown',fbPointer);
+ cv.addEventListener('contextmenu',function(e){e.preventDefault();});
+ cv.addEventListener('wheel',function(e){ e.preventDefault(); if(FB3.ready)FB3.camR=clamp(FB3.camR*(1+e.deltaY*0.0013),44,205); },{passive:false});
+ cv.addEventListener('pointermove',function(e){ if(FB3._cam&&FB3.ready){ var dx=e.clientX-FB3._cam.x,dy=e.clientY-FB3._cam.y; FB3._cam.x=e.clientX; FB3._cam.y=e.clientY; FB3.camAz-=dx*0.006; FB3.camEl=clamp(FB3.camEl+dy*0.006,0.12,1.46); } });
+ window.addEventListener('pointerup',function(){ if(FB3)FB3._cam=null; });
+ document.getElementById('fbHint').textContent='Tap a ship to select, an enemy to focus fire, open space to reposition. Right-drag to orbit, scroll to zoom. Press Begin.';
 }
 function fbShipAt(wx,wy){
  var best=null,bd=1e9;
@@ -3739,6 +3753,7 @@ function fbShipAtScreen(cx,cy){ var best=null,bd=1e9; for(var i=0;i<FB.ships.len
 var _fbRay=null,_fbPlane=null,_fbHit=null;
 function fbPointer(e){
  var cv=document.getElementById('fbcanvas'); if(!cv)return; var rect=cv.getBoundingClientRect();
+ if(FB.use3d&&(e.button===2||e.button===1)){ FB3._cam={x:e.clientX,y:e.clientY}; return; } // right/middle drag orbits the camera
  if(FB.use3d){
   var cx=e.clientX-rect.left, cy=e.clientY-rect.top, cw=rect.width, ch=rect.height;
   var hit=fbShipAtScreen(cx,cy);
@@ -3832,6 +3847,7 @@ function fbDrawUI(){
   var col=FB_COL[s.side]; var w2=(s.type==='flag'?46:s.type==='destroyer'?36:24); var half=w2/2;
   if(FBUI.sel.has(s.id)){ x.strokeStyle='#e8c96a'; x.lineWidth=2; x.setLineDash([5,4]); x.beginPath(); x.arc(sx,sy,half+7,0,7); x.stroke(); x.setLineDash([]); }
   if(s.flag){ x.fillStyle=col; x.beginPath(); x.moveTo(sx,sy-half-9); x.lineTo(sx+5,sy-half-1); x.lineTo(sx-5,sy-half-1); x.closePath(); x.fill(); }
+  if(s._captured&&FB.t-s._captured<2.6){ x.fillStyle='#e8c96a'; x.font='700 12px JetBrains Mono,monospace'; x.textAlign='center'; x.fillText('TAKEN',sx,sy-half-15); }
   var by=sy+half+3; x.fillStyle='rgba(0,0,0,0.55)'; x.fillRect(sx-half-1,by-1,w2+2,6.5);
   x.fillStyle='#6ee07f'; x.fillRect(sx-half,by,w2*Math.max(0,s.hull/s.hullMax),3);
   x.fillStyle='#5aa0ff'; x.fillRect(sx-half,by+3.3,w2*Math.max(0,s.crew/s.crewMax),2.3);
