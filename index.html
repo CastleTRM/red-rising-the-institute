@@ -3519,7 +3519,7 @@ function fbSim(dt){
   }
   const tg=sp.tgt;if(!tg){continue;}
   const dist=Math.hypot(tg.x-sp.x,tg.y-sp.y);
-  if(sp.rout){const ang=Math.atan2(sp.y-tg.y,sp.x-tg.x)+0.4;sp.x+=Math.cos(ang)*sp.spd*dt;sp.y+=Math.sin(ang)*sp.spd*dt;if(sp.x<-40||sp.x>FB.W+40||sp.y<-40||sp.y>FB.H+40)sp.dead=true;continue;}
+  if(sp.rout){ if(!(sp._latch&&FB.t-sp._latch<0.4)){ const ang=Math.atan2(sp.y-tg.y,sp.x-tg.x)+0.4;sp.x+=Math.cos(ang)*sp.spd*dt;sp.y+=Math.sin(ang)*sp.spd*dt;if(sp.x<-40||sp.x>FB.W+40||sp.y<-40||sp.y>FB.H+40)sp.dead=true; } continue; }
   const wantBoard=(sp.type==='leech')||(sp.board>sp.gun);
   const desired=wantBoard?20:sp.range*0.72;
   if(dist>desired){const ang=Math.atan2(tg.y-sp.y,tg.x-sp.x);sp.x+=Math.cos(ang)*sp.spd*dt;sp.y+=Math.sin(ang)*sp.spd*dt;}
@@ -3529,7 +3529,8 @@ function fbSim(dt){
    var dmg=sp.gun*wt.mul; if(wt.punch&&tg.hullMax<sp.hullMax)dmg*=1.5; var crit=false; if(wt.crit&&Math.random()<wt.crit){dmg*=2.2;crit=true;}
    tg.hull-=dmg; sp._shot={to:tg.id,kind:wt.kind,crit:crit}; }
   // boarding: leechcraft drills through the hull and bleeds the crew
-  if(dist<=26){ tg.crew-=sp.board*dt*1.6; if(sp.type==='leech'){ sp._drill=tg.id; tg._boardBy=sp.side; } }
+  if(dist<=26){ tg.crew-=sp.board*dt*1.6; if(sp.type==='leech'){ sp._drill=tg.id; tg._boardBy=sp.side; tg._latch=FB.t;
+    if(tg.crew<=0&&!tg.flag&&tg.side!==sp.side){ tg.side=sp.side; tg.crew=Math.max(1,Math.round(tg.crewMax*0.4)); tg.rout=false; tg.tgt=null; tg.ord=null; tg.dead=false; tg._captured=FB.t; } } }
   if(sp.hull<sp.hullMax*0.35)sp.crew-=sp.hullMax*0.03*dt;
   if(sp.hull<=0){sp.dead=true;}
   else if(sp.crew<=0){
