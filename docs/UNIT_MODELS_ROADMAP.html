@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Animated Unit Models · Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Barlow+Condensed:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--black:#08080a;--line:#241d15;--gold:#d4af37;--gold-bright:#e8c96a;--gold-dim:#8a6e2f;
+--bone:#f2ead9;--ink:#8f877a;--dim:#6c665c;--grn:#7fc9a0;--red:#e88a6a;--blu:#8fb7d6;
+--fd:'Cinzel',Georgia,serif;--fb:'Barlow Condensed','Arial Narrow',sans-serif;--fm:'JetBrains Mono',ui-monospace,monospace;}
+*{box-sizing:border-box}
+body{background:radial-gradient(1400px 900px at 50% -6%,#14110d 0%,#08080a 60%,#050506 100%);color:var(--bone);font-family:var(--fb);letter-spacing:.02em;line-height:1.55;margin:0;padding:0 0 100px}
+.wrap{max-width:940px;margin:0 auto;padding:0 22px}
+::selection{background:var(--gold-dim);color:#0a0a0a}
+header{padding:70px 0 34px;text-align:center;border-bottom:1px solid var(--line)}
+.eyebrow{font-family:var(--fm);font-size:10px;letter-spacing:.36em;color:var(--gold-dim);text-transform:uppercase}
+h1{font-family:var(--fd);font-weight:900;font-size:48px;letter-spacing:.1em;color:var(--gold-bright);margin:16px 0 0;line-height:1.05}
+.sub{font-size:17px;color:var(--ink);margin:16px auto 0;max-width:740px}
+.meta{font-family:var(--fm);font-size:10px;letter-spacing:.2em;color:var(--gold-dim);margin-top:18px;text-transform:uppercase}
+nav{position:sticky;top:0;z-index:50;background:rgba(8,8,10,.93);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 0;margin-bottom:6px}
+nav .wrap{display:flex;flex-wrap:wrap;gap:6px}
+nav a{font-family:var(--fm);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--gold-dim);border:1px solid var(--line);border-radius:4px;padding:6px 9px;text-decoration:none;white-space:nowrap}
+nav a:hover{color:var(--gold-bright);border-color:var(--gold-dim);background:#0f0d0a}
+h2{font-family:var(--fd);font-weight:700;font-size:26px;letter-spacing:.07em;color:var(--gold-bright);text-transform:uppercase;margin:58px 0 10px;padding-top:28px;border-top:1px solid var(--line);scroll-margin-top:66px}
+h2 .n{font-family:var(--fm);font-size:11px;color:var(--gold-dim);letter-spacing:.2em;display:block;margin-bottom:6px;text-transform:uppercase}
+h3{font-family:var(--fd);font-weight:700;font-size:18px;letter-spacing:.06em;color:var(--bone);margin:28px 0 8px}
+h4{font-family:var(--fm);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold-dim);margin:22px 0 6px}
+p{margin:9px 0}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+th{font-family:var(--fm);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-dim);text-align:left;padding:9px 9px;border-bottom:1px solid var(--gold-dim);white-space:nowrap}
+td{padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+td.k{font-family:var(--fm);font-size:12px;color:var(--blu);white-space:nowrap}
+tr:hover td{background:#0d0c10}
+.sc{font-family:var(--fm);text-align:center;white-space:nowrap}
+.hero{background:linear-gradient(180deg,#141210,#0d0c0a);border:1px solid var(--gold-dim);border-radius:11px;padding:20px 22px;margin:22px 0}
+.hero .t{font-family:var(--fd);font-size:19px;color:var(--gold-bright);font-weight:700}
+.hero p{color:var(--ink);margin-top:8px;font-size:15px}
+.rule{background:#0e0d10;border:1px solid var(--line);border-left:3px solid var(--gold-dim);border-radius:6px;padding:13px 15px;margin:10px 0}
+.rule b{color:var(--gold-bright)}
+.rule p{margin:5px 0 0;font-size:14.5px;color:var(--ink)}
+.note{background:#0e0d10;border-left:2px solid var(--gold-dim);padding:12px 16px;margin:16px 0;color:var(--ink);font-size:15px}
+.warn{background:#120c0c;border-left:2px solid #6b2e2e;padding:12px 16px;margin:16px 0;color:#e5b3a3;font-size:15px}
+.good{background:#0c120e;border-left:2px solid #2e6b4f;padding:12px 16px;margin:16px 0;color:#a8d6bc;font-size:15px}
+code{font-family:var(--fm);font-size:12.5px;color:var(--gold-bright);background:#0e0d10;padding:1px 5px;border-radius:3px}
+ul{margin:8px 0;padding-left:20px}li{margin:5px 0}
+.tier{border:1px solid var(--line);border-radius:10px;padding:4px 18px 16px;margin:18px 0;background:#0b0a0d}
+.tier .th{font-family:var(--fd);font-size:17px;color:var(--gold-bright);font-weight:700;margin:16px 0 2px}
+.tier .ts{font-family:var(--fm);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-dim)}
+.tier .risk{font-family:var(--fm);font-size:9px;letter-spacing:.12em;text-transform:uppercase;padding:2px 7px;border-radius:20px;border:1px solid;margin-left:8px}
+.r-low{color:#7fc9a0;border-color:#2e6b4f}.r-med{color:#e0b45a;border-color:#6b5320}.r-high{color:#e88a6a;border-color:#6b2e2e}
+.foot{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);font-family:var(--fm);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-align:center}
+.src{font-size:12px;color:var(--dim)}.src a{color:var(--gold-dim);text-decoration:none}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="eyebrow">The Institute · Art Pipeline · Roadmap</div>
+  <h1>From Billboards to Living Armies</h1>
+  <div class="sub">The path from today's flat figures to real animated 3D soldiers on the battlefield, at the scale a battle actually needs. The honest truth about what is hard, and a phased route that ships value at every step.</div>
+  <div class="meta">Target: up to ~640 animated humanoids · Three.js · single-file build</div>
+</div></header>
+
+<nav><div class="wrap">
+  <a href="#goal">The Goal</a>
+  <a href="#truth">The Hard Truth</a>
+  <a href="#pipeline">Art Pipeline</a>
+  <a href="#crowd">The Crowd Problem</a>
+  <a href="#budget">Performance Budget</a>
+  <a href="#phases">The Phases</a>
+  <a href="#engine">The r128 Question</a>
+  <a href="#delivery">Asset Delivery</a>
+</div></nav>
+
+<div class="wrap">
+
+<h2 id="goal"><span class="n">01 / The Goal</span>Eleven Units, Six Hundred Soldiers</h2>
+<div class="hero">
+  <div class="t">Replace flat figures with animated 3D models, without setting the frame rate on fire.</div>
+  <p>You have concept art for all eleven unit types: the sabre knight, the hooded archer, the bare-armed spearman, the wolf-cloaked howler, the golden champion, the caped captain, the onager, the horse archer, the lancer, the black-armoured hammer, the legionary pikeman. That art is the visual target. The challenge is not making one of them look good in 3D, it is drawing up to sixteen squads of about forty men each, roughly six hundred and forty animated bodies, moving at once, and holding a playable frame rate on ordinary hardware.</p>
+</div>
+<p>This document is the roadmap to get there. It is drawn from proven techniques used in shipping web games and Three.js crowd demos, and it is deliberately staged so that every phase is a visible upgrade you can ship on its own, rather than a single high-risk leap.</p>
+
+<h2 id="truth"><span class="n">02 / The Hard Truth</span>Rendering Is Not the Bottleneck. Animation Is.</h2>
+<p>The instinct is that six hundred models is a rendering problem. It is not. Modern GPUs draw the triangles easily; six hundred soldiers at a thousand triangles each is under a million triangles, trivial. The wall is the <b>CPU cost of animating skeletons</b>. Every animated character in the naive approach carries its own animation mixer and a skeleton of ~25 bones, and every one of those bones is an object whose matrix is recomputed every single frame.</p>
+<div class="warn"><b>The measured ceiling.</b> In a documented Three.js case study, even with lean 700-vertex, 25-bone soldiers, the frame rate fell below 60 past roughly <b>200 to 250 animated characters</b> on an older machine, and profiling showed about three quarters of the frame was spent in animation and bone-matrix maths, not in drawing. The naive "load one model, clone it per soldier, give each its own mixer" approach simply will not reach 640. This is the single most important fact in the whole plan.</div>
+<p>The good news: this is a solved problem, and the solutions are well documented. The rest of this roadmap is about applying them in the right order.</p>
+<p class="src">Source: Three.js forum, <a href="https://discourse.threejs.org/t/optimization-of-large-amounts-100-1000-of-skinned-meshes-cpu-bottlenecks/58196">Optimization of large amounts of skinned meshes</a>.</p>
+
+<h2 id="pipeline"><span class="n">03 / The Art Pipeline</span>From Concept to Game-Ready Model</h2>
+<h4>Format</h4>
+<p>The runtime format is <b>glTF 2.0 / GLB</b>: the web 3D standard, loaded natively by Three.js, carrying mesh, materials, skeleton and animation in one file, with compression built in. Assets load at runtime from <code>/assets</code>, exactly like the battle terrains do today.</p>
+<h4>Where the models come from</h4>
+<table>
+<thead><tr><th>Source</th><th>Best for</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td class="k">Mixamo (free)</td><td>Crowd soldiers</td><td>Upload a humanoid mesh, auto-rig, download a large library of game animations (walk, run, attack, die). The standard free source of rigged, animated humanoids. ~25-bone skeleton, ideal for crowds.</td></tr>
+<tr><td class="k">Synty / KayKit / Quaternius</td><td>Consistent rosters</td><td>Low-poly game-ready character packs, rigged, many animations. Synty is paid and highest quality; KayKit and Quaternius are free/CC0.</td></tr>
+<tr><td class="k">Meshy / Tripo</td><td>Bespoke units from your art</td><td>Image-to-3D plus auto-rig: feed your eleven concepts, get riggable meshes. Treat AI output as a starting mesh that needs retopology before it crowds well.</td></tr>
+<tr><td class="k">Rodin (Hyper3D)</td><td>Hero / champion models</td><td>Cleanest geometry for close-up hero units; rig separately in Mixamo or Blender.</td></tr>
+</tbody>
+</table>
+<h4>Budgets per soldier (for crowds)</h4>
+<p>Keep crowd units lean: roughly <b>700 to 1,500 triangles</b>, a <b>128 to 256 pixel texture</b>, and about <b>25 bones</b> (no fingers, no face; bones dominate CPU cost). Hero and champion models can be far richer, 5,000 to 15,000 triangles and 40 to 60 bones, because only a handful are ever on screen. Build two or three LOD tiers per unit (near, mid, far) so distant soldiers cost almost nothing; tools like <code>gltf-transform</code> and <code>meshoptimizer</code> generate them automatically.</p>
+
+<h2 id="crowd"><span class="n">04 / The Crowd Problem</span>How the Big Studios Draw Thousands</h2>
+<p>Three techniques, from simplest to most powerful, each pushing the ceiling higher.</p>
+<div class="rule"><b>1 · Animation throttling.</b><p>Update each soldier's animation every few frames instead of every frame, and skip soldiers that are off-screen or far away entirely. Roughly linear win; lifts the ceiling from ~250 to ~500. Nearly free to implement, and it stacks with everything below.</p></div>
+<div class="rule"><b>2 · Shared-skeleton pooling.</b><p>Instead of one skeleton per soldier, keep <b>one skeleton per animation state</b> (idle, walk, attack, die) and bind every soldier in that state to the shared skeleton. Skeleton maths then scales with the number of states, not the number of soldiers. A documented implementation reached <b>1,000 animated units at 60fps on a low-end laptop</b> this way. The trade: soldiers sharing a state animate in lockstep, invisible in a crowd, wrong for a hero.</p></div>
+<div class="rule"><b>3 · Vertex Animation Textures (VAT), the crowd-scale answer.</b><p>Bake the animation offline into a texture: for each frame, store every vertex's position as pixels. At runtime a custom shader reads the texture and moves the vertices on the GPU, with <b>no skeleton and no mixer at all</b>. Because the mesh is now static, GPU instancing turns on and thousands of soldiers draw in a single call, each at its own frame. NVIDIA's canonical write-up drew about <b>10,000 independently animating characters at 30fps</b> with this class of technique. The cost: baked animations are fixed at bake time and blend only approximately, so VAT is for the crowd, not for heroes.</p></div>
+<p>Alongside these, the far field uses <b>billboards and impostors</b>: camera-facing sprites (which is also Phase 0), animated by cycling a small sprite sheet, for the most distant squads where no one can tell they are flat. A near/mid/far LOD system blends all three.</p>
+<p class="src">Sources: <a href="https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-2-animated-crowd-rendering">NVIDIA GPU Gems 3, Animated Crowd Rendering</a>; <a href="https://github.com/agargaro/instanced-mesh">agargaro/InstancedMesh2</a>; <a href="https://github.com/luis-herasme/instanced-skinned-mesh">luis-herasme/instanced-skinned-mesh</a>; Blender <a href="https://extensions.blender.org/add-ons/vat/">VAT add-on</a>.</p>
+
+<h2 id="budget"><span class="n">05 / Performance Budget</span>What Is Actually Feasible</h2>
+<p>On mid-range hardware, targeting 60fps for typical battles and 30fps as a floor for the biggest sixteen-squad clashes.</p>
+<table>
+<thead><tr><th>Technique</th><th>Feasible characters</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td class="k">Naive skinned + one mixer each</td><td class="sc">~200-250</td><td>The wall. Will not reach a full battle.</td></tr>
+<tr><td class="k">+ animation throttling</td><td class="sc">~500</td><td>Cheap, stacks with the rest.</td></tr>
+<tr><td class="k">Shared-skeleton pool + throttling</td><td class="sc">~1,000</td><td>60fps on a low-end laptop. Lockstep per state.</td></tr>
+<tr><td class="k">Instanced skinned + LOD</td><td class="sc">~2,000</td><td>Per-instance animation, still some CPU cost.</td></tr>
+<tr><td class="k">VAT instanced</td><td class="sc">thousands-~10,000</td><td>GPU-bound. The true crowd solution.</td></tr>
+</tbody>
+</table>
+<p><b>The recommended mix for 640:</b> a handful of true skinned heroes and champions up close (ten or fewer), the bulk of the army as VAT-instanced or shared-skeleton soldiers in the mid field, and billboards for distant squads. Draw calls stay under a couple of hundred; geometry stays under a million triangles; the frame holds.</p>
+
+<h2 id="phases"><span class="n">06 / The Phases</span>A Route That Ships at Every Step</h2>
+
+<div class="tier">
+  <div class="ts">Phase 0 · photoreal billboards<span class="risk r-low">Low risk</span></div>
+  <div class="th">Replace the box figures with your concept art, now</div>
+  <ul>
+    <li>Turn each of the eleven unit concepts into a small sprite (idle, and ideally a walk and attack frame), background removed, tinted to the house colour on a canvas at load. This is exactly what the existing <code>INSTITUTE_TROOPS</code> sprite spec describes.</li>
+    <li>Draw each soldier as a camera-facing sprite. Near-free for 640 units, works on the current engine untouched, and it becomes your permanent far-LOD layer later, so it is not throwaway work.</li>
+    <li><b>Immediate, dramatic visual upgrade for very little effort.</b> This is the first thing to build.</li>
+  </ul>
+</div>
+
+<div class="tier">
+  <div class="ts">Phase 1 · a few 3D heroes<span class="risk r-low">Low risk</span></div>
+  <div class="th">Real rigged models for champions and leaders</div>
+  <ul>
+    <li>Source two to five hero units (the champion, the captain, the wolf-howler) as fully rigged GLB models, animate with a standard mixer. Only a handful on screen, so no crowd tech needed.</li>
+    <li>Validates the whole art pipeline end to end: authoring, Blender, compression, runtime load. Establishes the visual bar. Works on the current engine.</li>
+  </ul>
+</div>
+
+<div class="tier">
+  <div class="ts">Phase 2 · the instanced 3D crowd<span class="risk r-high">High risk</span></div>
+  <div class="th">The core investment: real 3D soldiers at scale</div>
+  <ul>
+    <li>The main effort. Either bake each crowd unit's small clip set to VAT and render as an instanced mesh with a custom shader, or ship the simpler shared-skeleton-plus-throttling approach first (pure Three.js, no baking, ~1,000 units) and move to VAT later.</li>
+    <li>Risks: the VAT baking pipeline, shader authoring, approximate animation blending, and wiring instance transforms to the existing per-soldier game logic. This is where an engine upgrade pays for itself.</li>
+  </ul>
+</div>
+
+<div class="tier">
+  <div class="ts">Phase 3 · the LOD system<span class="risk r-med">Medium risk</span></div>
+  <div class="th">Blend it all together</div>
+  <ul>
+    <li>Wire the tiers: skinned heroes and nearest squads, VAT-instanced mid field, Phase 0 billboards far, chosen per soldier by distance, with frustum culling and distance-based animation throttling.</li>
+    <li>The top-down battle camera makes hiding the transitions easy. Delivers the full 640-at-playable-framerate target.</li>
+  </ul>
+</div>
+
+<div class="good"><b>Sequencing:</b> Phases 0 and 1 are independently shippable, low risk, and run on the current engine, so build them now, this quarter. They alone transform how the game looks. Do the engine upgrade, then Phase 2, as a dedicated project once the pipeline and the visual bar are proven.</div>
+
+<h2 id="engine"><span class="n">07 / The r128 Question</span>Upgrade Before the Crowd</h2>
+<p>The game is pinned to Three.js r128 (2021). Phases 0 and 1, and even a crowd solution, are all possible on r128: billboards are trivial, hero models just need the standard loader, and VAT is only a custom shader, which r128 runs fine. So nothing is blocked today.</p>
+<p>But before the Phase 2 crowd work, an upgrade to a current release is worth it. r128 predates the modern crowd tooling: <code>BatchedMesh</code>, the current instanced-skinning libraries, and years of renderer performance work, all of which the best-documented crowd techniques target. Back-porting them to r128 is friction paid repeatedly.</p>
+<div class="note"><b>What upgrading involves.</b> The one structural change is that current Three.js is ES-module only, so the single-file build moves to an import map (a small script block pointing at the module build). Lighting and colour management defaults also changed, so materials need re-tuning, and a handful of classes were renamed (find-and-replace). For a single-file app, budget a few focused days plus visual QA. Recommendation: keep Phases 0 and 1 on r128 to ship visuals sooner, and make the upgrade the first task of Phase 2.</div>
+<p class="src">Source: Three.js <a href="https://github.com/mrdoob/three.js/wiki/Migration-Guide">Migration Guide</a>.</p>
+
+<h2 id="delivery"><span class="n">08 / Asset Delivery</span>Keeping the Build Lean</h2>
+<p>The art-split already proved the model: heavy art lives in <code>/assets</code> and loads at runtime. Character models extend it.</p>
+<ul>
+<li><b>Geometry:</b> compress GLB with Draco or meshopt (the latter also compresses animation data and decodes faster), cutting model size by 60 to 90 per cent.</li>
+<li><b>Textures:</b> usually the biggest cost. Use KTX2 / Basis Universal for GPU-compressed textures, and keep crowd textures small, 128 to 256 pixels.</li>
+<li><b>Atlas and tint:</b> put all crowd soldiers on a shared texture atlas so they share a material and instance together; recolour the twelve houses with a per-instance tint uniform, not twelve separate textures. This is the same luminance-preserving tint the sprite pipeline already uses.</li>
+<li><b>Stream lazily:</b> load a unit's model on first spawn, then cache and reuse. One pipeline, <code>gltf-transform</code>, does Draco, meshopt, KTX2 and LOD generation as a build step.</li>
+</ul>
+
+<div class="foot">Animated Unit Models · Roadmap · Omnis vir lupus</div>
+</div>
+</body>
+</html>

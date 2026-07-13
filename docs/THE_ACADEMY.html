@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Academy · Sequel Design Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Barlow+Condensed:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--black:#08080a;--line:#221c2a;--gold:#d4af37;--gold-bright:#e8c96a;--gold-dim:#8a6e2f;
+--bone:#eef0f6;--ink:#8a8ea0;--dim:#63677a;--grn:#7fc9a0;--red:#e8776a;--void:#5a7fb8;--voidb:#8fb7e6;
+--fd:'Cinzel',Georgia,serif;--fb:'Barlow Condensed','Arial Narrow',sans-serif;--fm:'JetBrains Mono',ui-monospace,monospace;}
+*{box-sizing:border-box}
+body{background:radial-gradient(1300px 900px at 50% -8%,#0d1020 0%,#080810 55%,#050507 100%);color:var(--bone);
+font-family:var(--fb);letter-spacing:.02em;line-height:1.55;margin:0;padding:0 0 100px}
+.wrap{max-width:940px;margin:0 auto;padding:0 22px}
+::selection{background:var(--gold-dim);color:#0a0a0a}
+header{padding:70px 0 34px;text-align:center;border-bottom:1px solid var(--line)}
+.eyebrow{font-family:var(--fm);font-size:10px;letter-spacing:.36em;color:var(--gold-dim);text-transform:uppercase}
+h1{font-family:var(--fd);font-weight:900;font-size:52px;letter-spacing:.13em;color:var(--gold-bright);margin:16px 0 0;line-height:1.04}
+.sub{font-size:17px;color:var(--ink);margin:16px auto 0;max-width:740px}
+.meta{font-family:var(--fm);font-size:10px;letter-spacing:.2em;color:var(--gold-dim);margin-top:18px;text-transform:uppercase}
+nav{position:sticky;top:0;z-index:50;background:rgba(8,8,14,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 0;margin-bottom:6px}
+nav .wrap{display:flex;flex-wrap:wrap;gap:6px}
+nav a{font-family:var(--fm);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--gold-dim);border:1px solid var(--line);border-radius:4px;padding:6px 9px;text-decoration:none;white-space:nowrap}
+nav a:hover{color:var(--gold-bright);border-color:var(--gold-dim);background:#0f0d18}
+h2{font-family:var(--fd);font-weight:700;font-size:26px;letter-spacing:.07em;color:var(--gold-bright);text-transform:uppercase;margin:58px 0 10px;padding-top:28px;border-top:1px solid var(--line);scroll-margin-top:66px}
+h2 .n{font-family:var(--fm);font-size:11px;color:var(--gold-dim);letter-spacing:.2em;display:block;margin-bottom:6px;text-transform:uppercase}
+h3{font-family:var(--fd);font-weight:700;font-size:18px;letter-spacing:.06em;color:var(--bone);margin:28px 0 8px}
+h4{font-family:var(--fm);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold-dim);margin:22px 0 6px}
+p{margin:9px 0}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+th{font-family:var(--fm);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-dim);text-align:left;padding:9px 9px;border-bottom:1px solid var(--gold-dim);white-space:nowrap}
+td{padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+td.k{font-family:var(--fm);font-size:12px;color:var(--voidb);white-space:nowrap}
+tr:hover td{background:#0d0c16}
+.hero{background:linear-gradient(180deg,#12131f,#0b0b14);border:1px solid var(--gold-dim);border-radius:11px;padding:20px 22px;margin:22px 0}
+.hero .t{font-family:var(--fd);font-size:19px;color:var(--gold-bright);font-weight:700}
+.hero p{color:var(--ink);margin-top:8px;font-size:15px}
+.pill{font-family:var(--fm);font-size:9px;letter-spacing:.12em;text-transform:uppercase;padding:2px 7px;border-radius:20px;border:1px solid;white-space:nowrap}
+.p-canon{color:#7fc9a0;border-color:#2e6b4f;background:#0c120e}
+.p-inv{color:#8fb7e6;border-color:#37536b;background:#0a0f16}
+.rule{background:#0e0d16;border:1px solid var(--line);border-left:3px solid var(--gold-dim);border-radius:6px;padding:13px 15px;margin:10px 0}
+.rule b{color:var(--gold-bright)}
+.rule p{margin:5px 0 0;font-size:14.5px;color:var(--ink)}
+.note{background:#0e0d16;border-left:2px solid var(--gold-dim);padding:12px 16px;margin:16px 0;color:var(--ink);font-size:15px}
+.void{background:#0a0f18;border-left:2px solid var(--void);padding:12px 16px;margin:16px 0;color:#bcd0ea;font-size:15px}
+.good{background:#0c120e;border-left:2px solid #2e6b4f;padding:12px 16px;margin:16px 0;color:#a8d6bc;font-size:15px}
+code{font-family:var(--fm);font-size:12.5px;color:var(--gold-bright);background:#0e0d16;padding:1px 5px;border-radius:3px}
+ul{margin:8px 0;padding-left:20px}li{margin:5px 0}
+.tier{border:1px solid var(--line);border-radius:10px;padding:4px 18px 16px;margin:18px 0;background:#0a0a12}
+.tier .th{font-family:var(--fd);font-size:17px;color:var(--gold-bright);font-weight:700;margin:16px 0 2px}
+.tier .ts{font-family:var(--fm);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-dim)}
+.foot{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);font-family:var(--fm);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-align:center}
+.src{font-size:12px;color:var(--dim);margin-top:4px}
+.src a{color:var(--gold-dim);text-decoration:none}
+.legend span{margin-right:16px;font-family:var(--fm);font-size:11px}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="eyebrow">Red Rising · The Sequel · Design Map</div>
+  <h1>The Academy</h1>
+  <div class="sub">Where The Institute was a war of standards in a valley, The Academy is a war of fleets in the void. This is the canon foundation, the core loop, and the build path, drawn straight from the games we already have.</div>
+  <div class="meta">Sequel to The Institute · Source: Golden Son (Book Two) · Fan project</div>
+</div></header>
+
+<nav><div class="wrap">
+  <a href="#pitch">The Pitch</a>
+  <a href="#canon">Canon vs Invented</a>
+  <a href="#loop">Core Loop</a>
+  <a href="#void">Void Warfare</a>
+  <a href="#ships">Ships &amp; Roster</a>
+  <a href="#progress">Progression &amp; Politics</a>
+  <a href="#continuity">Continuity</a>
+  <a href="#victory">Victory</a>
+  <a href="#tone">Tone &amp; Look</a>
+  <a href="#build">Build Path</a>
+</div></nav>
+
+<div class="wrap">
+
+<h2 id="pitch"><span class="n">01 / The Pitch</span>Land War to Void War</h2>
+<div class="hero">
+  <div class="t">Same meritocracy, same hidden strings, a whole new battlefield.</div>
+  <p>In the canon, a Gold who survives the Institute goes on to the Academy: a school in the Asteroid Belt where the young elite learn to command starfleets. It is the natural, canonical sequel to your first game. The Institute taught you to take a castle; the Academy teaches you to take a ship. And it hands you, ready-made, the single sharpest theme in Red Rising: you can do everything right and still be cheated of victory by the powerful. Darrow does not win the Academy. That defeat, and the betrayal that follows it, launches the war that consumes the rest of the series.</p>
+</div>
+<p>The design opportunity is unusually clean because <b>the engine already exists in The Institute</b>. Buried in the current build is a complete fleet-combat simulation (<code>fbSim</code>, <code>fbStartSim</code>, ship types with hull, crew, gunnery, boarding and routing) that today is only ever auto-resolved inside the narrative campaign. The Academy is, in large part, the game you get when you pull that latent system into the light and build a campaign around it.</p>
+
+<h2 id="canon"><span class="n">02 / Canon vs Invented</span>What the Books Give Us, and What We Build</h2>
+<p>The Academy is a real place in the novels but a thinly drawn one: it is essentially the prologue of <em>Golden Son</em>, not a fully mapped institution like the Institute. Everything below is tagged <span class="pill p-canon">Canon</span> (safe to build on) or <span class="pill p-inv">Invented</span> (our extrapolation, to be designed rather than quoted as lore).</p>
+<table>
+<thead><tr><th>Element</th><th>Basis</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td class="k">The Academy itself</td><td><span class="pill p-canon">Canon</span></td><td>A school in the Asteroid Belt teaching Golds contemporary space warfare. Open to any age. Requires a <b>patron</b> to sponsor and fund your place, unlike the Institute's secret compulsory draft.</td></tr>
+<tr><td class="k">"The Can"</td><td><span class="pill p-canon">Canon</span></td><td>The campus: a domed grey port on the fringe of the asteroid field, ringed with docks, topped by a glass garden. Doubles as Mid-Sector Command for Mars, Jupiter and Neptune.</td></tr>
+<tr><td class="k">The curriculum</td><td><span class="pill p-canon">Canon</span></td><td>Fleet and ground tactics, how to board and capture ships, gravBoots and starShells, and Nagal (the Obsidian tongue) to command Obsidian troops. Cadets are cut off from the holoNet.</td></tr>
+<tr><td class="k">The war games</td><td><span class="pill p-canon">Canon</span></td><td>The final exam: cadets are each given a fleet and fight a mock war across the asteroids, jumping rock to rock, hunting supply bases and stalking rivals until one fleet remains. Fought with <b>dummy munitions</b> so hulls survive.</td></tr>
+<tr><td class="k">Rose petals</td><td><span class="pill p-canon">Canon</span></td><td>Casualty motif for the victory ceremony: <b>red petals for Gold dead, white for the deaths of other Colours</b>. A ready-made, poignant UI language.</td></tr>
+<tr><td class="k">Rewards</td><td><span class="pill p-canon">Canon</span></td><td>The winning cadet's fleet leader is made a <b>Praetor</b>; careers as Imperator and fleet command follow.</td></tr>
+<tr><td class="k">The rigged defeat</td><td><span class="pill p-canon">Canon</span></td><td>Darrow finishes second to Karnus au Bellona because the Sovereign and Proctors interfere. His patron then severs him. This "win the game, lose to the strings" beat should be a signature mechanic, not a bug.</td></tr>
+<tr><td class="k">Fleet economy &amp; ship allotment</td><td><span class="pill p-inv">Invented</span></td><td>Numbers, balance and how many ships a cadet commands are not specified. We design them.</td></tr>
+<tr><td class="k">Cadet merit / ranking system</td><td><span class="pill p-inv">Invented</span></td><td>There is no Academy equivalent of the Institute's "Primus" bars. We invent the ladder.</td></tr>
+<tr><td class="k">Asteroid map, jumps, supply bases</td><td><span class="pill p-inv">Invented</span></td><td>Canon gives the concept; the map, jump rules and base mechanics are ours to build.</td></tr>
+<tr><td class="k">A "Passage" rite</td><td><span class="pill p-inv">Invented</span></td><td>The Academy has <b>no</b> kill-your-partner rite. Do not import one as canon. If a dark rite is wanted, invent it and mark it original.</td></tr>
+</tbody>
+</table>
+<p class="src">Sources: Red Rising Wiki, <a href="https://red-rising.fandom.com/wiki/The_Academy">The Academy</a>; <a href="https://red-rising.fandom.com/wiki/Golden_Son_(Book_Two)">Golden Son</a>; <a href="https://en.wikipedia.org/wiki/Golden_Son">Golden Son (plot)</a>.</p>
+
+<h2 id="loop"><span class="n">03 / The Core Loop</span>The Asteroid War</h2>
+<p>The Academy's campaign is a mirror of the Institute's, translated into three dimensions. Where the Institute had a valley of castles, the Academy has a field of asteroids. Where you marched columns, you jump fleets.</p>
+<div class="rule"><b>1 · Muster at the Can.</b><p>Your patron's funding buys and crews your starting fleet: a mix of light hunters, boarding craft and a capital flagship. Better patrons, and better standing, buy bigger fleets. This is the Academy's version of recruiting at your castle.</p></div>
+<div class="rule"><b>2 · Jump the field.</b><p>The strategic map is the asteroid belt. Fleets jump rock to rock, spending a movement/fuel budget. Asteroids hold <b>supply bases</b> (fuel, munitions, repair, crew) that you seize and hold. Fog of the void hides rival fleets until scouts or contact reveal them. This is march, zone of control and fog, reused.</p></div>
+<div class="rule"><b>3 · Contact becomes battle.</b><p>Move a fleet into a rival and the void battle fires there and then, exactly like the Institute's move-triggered combat. Win with jumps to spare and hunt on; lose and limp back crippled. Ships are precious, so the doctrine is to <b>cripple and board</b>, not destroy (see below).</p></div>
+<div class="rule"><b>4 · Last fleet standing.</b><p>The mock war ends when one cadet's fleet holds the field, and the winner is raised to Praetor. But the Proctors watch, and the Sovereign has favourites. Doing everything right may not be enough.</p></div>
+<div class="void"><b>Why this reuses so much.</b> March, ETA, zone of control, fog with memory, move-triggered battles, occupy-to-hold, supply and upkeep, five-route victory, coalition diplomacy: every one of these systems already exists and works in The Institute. The Academy re-skins the strategic layer from valley to void and swaps the battle layer from the land sim to the fleet sim you already own.</div>
+
+<h2 id="void"><span class="n">04 / Void Warfare</span>The Signature: Board, Don't Break</h2>
+<p>The one thing that makes Red Rising space combat unlike any other is that <b>warships are so expensive you fight to capture them intact</b>. A destroyer costs tens of billions; a dreadnought is a floating continent. So battles are not a gunnery duel to the death, they are a dance of maneuver, shielding and marine boarding. This should drive the entire battle layer.</p>
+<h3>The battle beats</h3>
+<ul>
+<li><b>Gunnery phase.</b> Railguns and missiles trade fire at range. Pulseshields soak damage and overheat; sustained fire drops a shield and lets kinetic rounds bite the hull. This is a shield gauge and a hull gauge, already modelled in <code>fbSim</code>.</li>
+<li><b>Close and cripple.</b> You do not want a kill, you want a mission-kill: knock out engines and shields so a ship is dead in the void and ripe to board.</li>
+<li><b>The boarding action.</b> LeechCraft latch onto a crippled hull, burn through with a thermal drill behind a shield, and pour in marines (Obsidians, Grays, a Gold champion). A crippled ship is then won in the corridors, crew against crew, under failing gravity. Capture it and it joins your fleet for the rest of the campaign.</li>
+<li><b>Rout and strike craft.</b> RipWing fighters screen the capitals and hunt boarding craft; a broken crew routs, exactly as a broken squad routs on land.</li>
+</ul>
+<div class="note"><b>The hook:</b> every battle is a risk calculus. Destroy the enemy flagship and you win the fight but gain nothing. Cripple and board it and you win the fight <em>and</em> add a capital ship to your fleet, at the risk of a bloody, uncertain marine assault. That single tension is a whole game's worth of decisions, and it is pure Red Rising.</div>
+
+<h2 id="ships"><span class="n">05 / Ships &amp; Roster</span>The Fleet</h2>
+<p>Canon ship classes map cleanly onto unit roles. The current fleet sim already has ship types with hull, crew, gun and board stats; this is the roster to grow it into.</p>
+<table>
+<thead><tr><th>Class</th><th>Role</th><th>Notes from canon</th></tr></thead>
+<tbody>
+<tr><td class="k">RipWing</td><td>Fighter / screen</td><td>Fast strike craft. Screens capitals, hunts boarding craft. Your skirmisher.</td></tr>
+<tr><td class="k">LeechCraft</td><td>Boarding craft</td><td>Small, short range, ~50 troops, a thermal drill and a shield. The instrument of capture. Fragile, decisive.</td></tr>
+<tr><td class="k">Stork</td><td>Troop transport</td><td>Larger dropship. Carries the marines and the Iron Rain assault force.</td></tr>
+<tr><td class="k">TorchShip</td><td>Light capital / raider</td><td>Roughly half a kilometre. Armed military models act as light warships.</td></tr>
+<tr><td class="k">Destroyer</td><td>Line warship</td><td>Missiles and railguns, carries ~4 leechCraft. The workhorse of the line.</td></tr>
+<tr><td class="k">Man-of-War</td><td>Heavy line</td><td>Named at the Academy specifically. A step above the destroyer.</td></tr>
+<tr><td class="k">Dreadnought</td><td>Capital / flagship</td><td>Kilometres long, tens of thousands of crew, hundreds of thousands of troops, up to ~200 leechCraft. Built to take continents.</td></tr>
+<tr><td class="k">MoonBreaker</td><td>Super-capital</td><td>The largest class. An endgame prize, not a starting ship.</td></tr>
+</tbody>
+</table>
+<h3>The Iron Rain (the set-piece)</h3>
+<p>The signature spectacle of the setting: Golds and Obsidians in starShell armour fired from orbit down onto a planet or moon through spitTubes, Grays dropping in hivepods. As a game mode, the Iron Rain is the Academy's siege: once you hold the void above an objective, you launch an orbital assault to take the surface, blending your fleet layer with a ground assault the Institute's battle engine can render. Rare, costly, unforgettable.</p>
+
+<h2 id="progress"><span class="n">06 / Progression &amp; Politics</span>Patron, Rank, and the Strings</h2>
+<p>The Institute's progression was standards and Primus bars. The Academy's is a career, and it is openly rigged, which is the point.</p>
+<ul>
+<li><b>Patron.</b> You do not enter the Academy on merit alone; a Gold House sponsors you. Your patron sets your starting fleet and expects returns. Disappoint them, as Darrow disappoints Nero au Augustus, and they can sever you mid-campaign, stripping your protection and rank. A living relationship gauge, not a menu.</li>
+<li><b>Rank ladder.</b> Cadet to Lancer to Praetor to Imperator. Invented for the game (canon has no Academy merit bars), but grounded in the real naval ranks the books use.</li>
+<li><b>Favour and Allegiance.</b> The narrative campaign in The Institute already tracks a patron's favour and your allegiance; the Academy makes these first-class. Favour buys ships and protection; allegiance is who you truly serve, and it can curdle.</li>
+<li><b>The rigged victory.</b> The defining mechanic. The Proctors and the Sovereign can and do interfere: a rival slips your lines, a "malfunction" costs you a flagship, a judgement goes against you. The player should learn that a clean tactical win is necessary but not sufficient, and that surviving the strings, or cutting them, is the real game. This turns Darrow's canonical humiliation into your central drama.</li>
+</ul>
+
+<h2 id="continuity"><span class="n">07 / Continuity</span>Carrying The Institute Forward</h2>
+<p>The two games are a matched pair, and the sequel should feel like it remembers the first.</p>
+<div class="rule"><b>Bring your house.</b><p>Let a completed Institute run seed your Academy start: the house you took a standard for, the standing you built, the honour or menace you earned, even a saved character from the creator. A prestigious Institute record buys a better patron.</p></div>
+<div class="rule"><b>Bring your people.</b><p>Darrow commands his Academy fleet with his old Institute lieutenants, Roque and Tactus. Officers you forged in the valley return as ship captains in the void. Rivals return too: beat House Bellona at the Institute and Karnus is waiting for you at the Academy.</p></div>
+<div class="rule"><b>Mirror the beats.</b><p>Same meritocracy, same hidden strings, same betrayals, escalated. The Institute ends in triumph; the Academy, faithful to canon, can end in a defeat that starts a war, setting up a third act.</p></div>
+
+<h2 id="victory"><span class="n">08 / Victory</span>More Than One Way to Win the Void</h2>
+<p>The Institute ships five victory routes; the Academy should inherit that breadth, re-themed.</p>
+<table>
+<thead><tr><th>Route</th><th>How you win</th></tr></thead>
+<tbody>
+<tr><td class="k">Conquest</td><td>Be the last fleet in the field. The straight military win.</td></tr>
+<tr><td class="k">Capture</td><td>Win by taking, not sinking: reach a threshold of boarded, captured enemy hulls. The doctrine victory.</td></tr>
+<tr><td class="k">Command</td><td>Prestige: graduate top of the class with your fleet and crews intact, made Praetor cleanly.</td></tr>
+<tr><td class="k">Patronage</td><td>Political: bind enough Houses and win the Sovereign's favour, whatever the scoreboard says.</td></tr>
+<tr><td class="k">Rising</td><td>The hidden route: if the game carries the series' rebellion, turn your fleet against the Society itself. The Red Rising ending.</td></tr>
+</tbody>
+</table>
+
+<h2 id="tone"><span class="n">09 / Tone &amp; Look</span>Aureate Gold on Void Black</h2>
+<p>The Institute's palette was gold, marble and blood. The Academy keeps the aureate gold and adds the cold of space: void black, asteroid grey, the sterile fluorescents of the Can against the warm gold of the officer class. Roman and mythological naming continues (ships and Houses), with a Norse layer for the Obsidian crews. The rose petals, red for Gold, white for the rest, are the emotional signature. Hold the series' refusal of clean power fantasy: ships full of people you are responsible for, wins that cost, and the constant corrosion of wearing the oppressor's uniform.</p>
+
+<h2 id="build"><span class="n">10 / Build Path</span>From Latent Engine to Sequel</h2>
+<p>Because the fleet sim already exists, the Academy can be reached in stages rather than built from nothing.</p>
+<div class="tier">
+  <div class="ts">Stage 1 · surface the engine · days</div>
+  <div class="th">Play a single void battle</div>
+  <ul><li>Wire <code>fbStartSim</code> into an interactive battle screen (the sim already runs; it just needs a camera, controls and a render pass). This is the Institute's Horizon 1 item and the Academy's foundation stone at once.</li><li>Add the shield and hull gauges and a first boarding action to the UI.</li></ul>
+</div>
+<div class="tier">
+  <div class="ts">Stage 2 · the asteroid campaign · weeks</div>
+  <div class="th">A strategic layer in the void</div>
+  <ul><li>Re-skin the campaign map: asteroids for lands, jumps for marches, supply bases for works, fleets for armies. Reuse march/ZoC/fog/occupy wholesale.</li><li>Fleet roster and the capture-not-kill loop; patron and rank progression; the rigged-victory system.</li></ul>
+</div>
+<div class="tier">
+  <div class="ts">Stage 3 · the full sequel · months</div>
+  <div class="th">Iron Rain, continuity, the Rising</div>
+  <ul><li>Iron Rain as the void-to-ground set-piece, bridging fleet and land battle engines.</li><li>Institute-to-Academy save carry (house, standing, officers, rivals).</li><li>The five void victory routes, the branching narrative campaign, and the defeat-that-starts-a-war ending.</li></ul>
+</div>
+<div class="good"><b>The strategic case:</b> a sequel usually means a second engine. Here it does not. The Academy is mostly a re-theme of systems The Institute already ships plus the fleet sim it already contains. That is the cheapest sequel you will ever get to build, and the most faithful to the source.</div>
+
+<div class="foot">The Academy · Design Map · Per aspera ad astra</div>
+</div>
+</body>
+</html>
