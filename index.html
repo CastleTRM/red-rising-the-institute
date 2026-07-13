@@ -3562,6 +3562,79 @@ const FB_SIZE={flag:70,destroyer:56,torch:48,ripwing:38,leech:36};
 const FB_COL={A:'#5cc8ff',B:'#ff6a5a'};
 let FBUI={raf:null,sel:new Set(),fx:[],resolve:null,done:false,s:1,ox:0,oy:0,last:0};
 
+/* ============ 3D VOID BATTLE (Three.js) ============
+   The 2D sim (fbSim) drives everything; this renders it as real ships in space. */
+var FB3={ready:false,ren:null,scene:null,cam:null,ships:null,shipGrp:null,beamA:null,beamB:null,stars:null,parts:[],_cv:null,K:0.08};
+function fb3BuildShip(type,side){
+ var g=new THREE.Group();
+ var hullMat=new THREE.MeshPhongMaterial({color:0x7c828d,shininess:36,specular:0x2a3546});
+ var accMat=new THREE.MeshBasicMaterial({color:side==='A'?0x49a6ff:0xff5748});
+ var box=function(w,h,d,x,y,z,mat){var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat||hullMat);m.position.set(x||0,y||0,z||0);g.add(m);return m;};
+ var nose=function(r,len,x,mat){var m=new THREE.Mesh(new THREE.ConeGeometry(r,len,10),mat||hullMat);m.rotation.z=-Math.PI/2;m.position.set(x,0,0);g.add(m);return m;};
+ var eng=function(r,x,z){var mt=new THREE.MeshBasicMaterial({color:0xffb15a,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending});var m=new THREE.Mesh(new THREE.SphereGeometry(r,10,10),mt);m.position.set(x,0,z||0);g.add(m);(g.userData.eng=g.userData.eng||[]).push(m);return m;};
+ if(type==='flag'){ box(11,1.9,2.3); box(3.2,2.2,1.4,-0.6,1.55,0); box(1.8,1.4,1,1.5,2.35,0); box(6,0.45,3.2,-1,0,0,accMat); nose(1.1,3.2,6.4); box(1.6,1,1,-2,0,1.7); box(1.6,1,1,-2,0,-1.7); eng(0.9,-6,0.95);eng(0.9,-6,-0.95);eng(0.7,-6,0); }
+ else if(type==='destroyer'){ box(8,1.15,1.35); box(2,1.25,0.95,-0.5,1.05,0); nose(0.8,2.4,4.6); box(3.4,0.38,2.1,-1,0,0,accMat); eng(0.7,-4.4,0.6);eng(0.7,-4.4,-0.6); }
+ else if(type==='leech'){ box(2.6,1.3,1.7); box(1.6,0.24,0.24,1.8,0.32,0.55); box(1.6,0.24,0.24,1.8,0.32,-0.55); box(1.1,0.3,1.4,-0.3,0,0,accMat); eng(0.55,-1.8,0); }
+ else if(type==='ripwing'){ box(2.2,0.42,0.55); box(1.7,0.12,0.12,-0.2,0,0.85); box(1.7,0.12,0.12,-0.2,0,-0.85); nose(0.4,1.2,1.4,accMat); eng(0.42,-1.35,0); }
+ else { box(5.2,0.78,0.78); nose(0.55,1.6,3); box(2.4,0.34,0.34,-0.5,0.5,0,accMat); eng(0.72,-3,0); }
+ return g;
+}
+function fb3MakeBeams(color){ var geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(28*2*3),3)); geo.setDrawRange(0,0); var ls=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:color,transparent:true,opacity:0.85,blending:THREE.AdditiveBlending})); ls.frustumCulled=false; return ls; }
+function fb3Init(){
+ var cv=document.getElementById('fbgl'); if(!cv||typeof THREE==='undefined')return false;
+ if(FB3.ready&&FB3._cv===cv)return true;
+ try{
+  FB3.ren=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true}); FB3.ren.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  FB3.scene=new THREE.Scene();
+  new THREE.TextureLoader().load('assets/void_bg.webp',function(t){ if(FB3.scene)FB3.scene.background=t; },undefined,function(){});
+  FB3.cam=new THREE.PerspectiveCamera(46,16/9,0.5,5000); FB3.cam.position.set(0,44,86); FB3.cam.lookAt(0,0,-2);
+  FB3.scene.add(new THREE.AmbientLight(0x5c6a82,0.95));
+  var dir=new THREE.DirectionalLight(0xfff2de,1.15); dir.position.set(34,60,44); FB3.scene.add(dir);
+  var rim=new THREE.DirectionalLight(0x4f7bff,0.5); rim.position.set(-44,22,-30); FB3.scene.add(rim);
+  var N=1300,pos=new Float32Array(N*3); for(var i=0;i<N;i++){ var r=500+Math.random()*1600,th=Math.random()*6.28,ph=Math.acos(2*Math.random()-1); pos[i*3]=r*Math.sin(ph)*Math.cos(th); pos[i*3+1]=Math.abs(r*Math.cos(ph))*0.5+30; pos[i*3+2]=r*Math.sin(ph)*Math.sin(th)-160; }
+  var sg=new THREE.BufferGeometry(); sg.setAttribute('position',new THREE.BufferAttribute(pos,3)); FB3.stars=new THREE.Points(sg,new THREE.PointsMaterial({color:0xbcd0f0,size:2,sizeAttenuation:false,transparent:true,opacity:0.75})); FB3.scene.add(FB3.stars);
+  FB3.beamA=fb3MakeBeams(0x9fd4ff); FB3.beamB=fb3MakeBeams(0xff9a86); FB3.scene.add(FB3.beamA); FB3.scene.add(FB3.beamB);
+  FB3._cv=cv; FB3.ready=true; return true;
+ }catch(e){ soft(e); FB3.ready=false; return false; }
+}
+function fb3Populate(){
+ if(!fb3Init())return false;
+ if(FB3.shipGrp)FB3.scene.remove(FB3.shipGrp);
+ FB3.shipGrp=new THREE.Group(); FB3.scene.add(FB3.shipGrp); FB3.ships=new Map(); FB3.parts=[];
+ for(var i=0;i<FB.ships.length;i++){ var s=FB.ships[i]; var m=fb3BuildShip(s.type,s.side); s._y3=((i%7)-3)*0.85; m.position.set((s.x-600)*FB3.K,s._y3,(s.y-340)*FB3.K); m.rotation.y=(s.side==='A')?0:Math.PI; FB3.shipGrp.add(m); FB3.ships.set(s.id,m); }
+ return true;
+}
+function fb3Explode(pos){
+ var m=new THREE.Mesh(new THREE.SphereGeometry(1,12,12),new THREE.MeshBasicMaterial({color:0xffca6a,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending})); m.position.copy(pos); FB3.scene.add(m); FB3.parts.push({mesh:m,t:0,life:0.7,kind:'boom'});
+ var fl=new THREE.PointLight(0xffb060,3,44); fl.position.copy(pos); FB3.scene.add(fl); FB3.parts.push({mesh:fl,t:0,life:0.4,kind:'light'});
+ for(var i=0;i<9;i++){ var d=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.3),new THREE.MeshBasicMaterial({color:i%2?0xff8a4a:0xffd070,transparent:true,opacity:1,blending:THREE.AdditiveBlending})); d.position.copy(pos); var a=Math.random()*6.28,sp=6+Math.random()*11; FB3.scene.add(d); FB3.parts.push({mesh:d,t:0,life:0.5+Math.random()*0.5,kind:'debris',vx:Math.cos(a)*sp,vy:(Math.random()-0.5)*7,vz:Math.sin(a)*sp}); }
+ try{sfx('rout');}catch(_){}
+}
+function fb3Muzzle(p,side){ var m=new THREE.Mesh(new THREE.SphereGeometry(0.32,8,8),new THREE.MeshBasicMaterial({color:side==='A'?0xbfe4ff:0xffc0b0,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending})); m.position.copy(p); FB3.scene.add(m); FB3.parts.push({mesh:m,t:0,life:0.12,kind:'flash'}); }
+function fb3TickParts(dt){ for(var i=FB3.parts.length-1;i>=0;i--){ var p=FB3.parts[i]; p.t+=dt; var k=p.t/p.life; if(k>=1){ FB3.scene.remove(p.mesh); if(p.mesh.geometry)p.mesh.geometry.dispose(); if(p.mesh.material)p.mesh.material.dispose(); FB3.parts.splice(i,1); continue; }
+ if(p.kind==='boom'){ p.mesh.scale.setScalar(1+k*6); p.mesh.material.opacity=0.9*(1-k); }
+ else if(p.kind==='light'){ p.mesh.intensity=3*(1-k); }
+ else if(p.kind==='flash'){ p.mesh.material.opacity=0.9*(1-k); p.mesh.scale.setScalar(1+k*2); }
+ else if(p.kind==='debris'){ p.mesh.position.x+=p.vx*dt; p.mesh.position.y+=p.vy*dt; p.mesh.position.z+=p.vz*dt; p.mesh.material.opacity=1-k; } } }
+function fb3SetBeams(ls,seg){ var pos=ls.geometry.attributes.position.array; var n=Math.min(seg.length,pos.length); for(var i=0;i<n;i++)pos[i]=seg[i]; ls.geometry.setDrawRange(0,Math.floor(n/3)); ls.geometry.attributes.position.needsUpdate=true; }
+function fb3Sync(dt){
+ if(!FB3.ready)return; var K=FB3.K,aSeg=[],bSeg=[];
+ for(var i=0;i<FB.ships.length;i++){ var s=FB.ships[i]; var m=FB3.ships.get(s.id); if(!m)continue;
+  if(s.dead||s.hull<=0){ if(m.visible){ m.visible=false; fb3Explode(m.position); } continue; }
+  var tx=(s.x-600)*K, tz=(s.y-340)*K, lp=Math.min(1,dt*9);
+  m.position.x+=(tx-m.position.x)*lp; m.position.z+=(tz-m.position.z)*lp; m.position.y+=((s._y3||0)-m.position.y)*Math.min(1,dt*4);
+  if(s.tgt&&!s.tgt.dead&&!s.rout){ var dx=s.tgt.x-s.x,dz=s.tgt.y-s.y; var ry=-Math.atan2(dz,dx); var cur=m.rotation.y; var diff=Math.atan2(Math.sin(ry-cur),Math.cos(ry-cur)); m.rotation.y=cur+diff*Math.min(1,dt*6); }
+  else { var base=(s.side==='A')?0:Math.PI; if(s.rout)base+=Math.PI; m.rotation.y+=(base-m.rotation.y)*Math.min(1,dt*4); }
+  if(m.userData.eng)for(var e=0;e<m.userData.eng.length;e++){ m.userData.eng[e].material.opacity=0.55+0.45*Math.random(); m.userData.eng[e].scale.setScalar(0.75+0.5*Math.random()); }
+  if(!s.rout&&s.tgt&&!s.tgt.dead&&s.tgt.hull>0){ var d=Math.hypot(s.tgt.x-s.x,s.tgt.y-s.y); if(d<=s.range){ var mt=FB3.ships.get(s.tgt.id); if(mt){ var seg=(s.side==='A')?aSeg:bSeg; seg.push(m.position.x,m.position.y,m.position.z,mt.position.x,mt.position.y,mt.position.z); if(Math.random()<0.35)fb3Muzzle(m.position,s.side); } } }
+ }
+ fb3SetBeams(FB3.beamA,aSeg); fb3SetBeams(FB3.beamB,bSeg); fb3TickParts(dt);
+ if(FB3.stars)FB3.stars.rotation.y+=dt*0.006;
+}
+function fb3Render(){ var cv=document.getElementById('fbgl'); if(!cv||!FB3.ren)return; var pr=FB3.ren.getPixelRatio(); var w=cv.clientWidth,h=cv.clientHeight; if(cv.width!==Math.round(w*pr)||cv.height!==Math.round(h*pr)){ FB3.ren.setSize(w,h,false); FB3.cam.aspect=w/h; FB3.cam.updateProjectionMatrix(); } FB3.ren.render(FB3.scene,FB3.cam); }
+var _fb3v=null;
+function fb3ProjectShip(m){ if(!_fb3v)_fb3v=new THREE.Vector3(); _fb3v.copy(m.position); _fb3v.project(FB3.cam); return {x:_fb3v.x*0.5+0.5,y:-_fb3v.y*0.5+0.5,behind:_fb3v.z>1}; }
+function fb3TeardownGL(){ if(FB3.ren){ try{FB3.ren.dispose();}catch(e){} } FB3.ready=false; FB3.ren=null; FB3.scene=null; FB3._cv=null; FB3.ships=null; FB3.shipGrp=null; FB3.parts=[]; }
 function fbBattleStart(fleetA,fleetB,opts){
  opts=opts||{};
  return new Promise(function(resolve){
@@ -3569,6 +3642,7 @@ function fbBattleStart(fleetA,fleetB,opts){
   FB.ttl=opts.title||'Void Engagement';
   FBUI={raf:null,sel:new Set(),fx:[],resolve:resolve,done:false,s:1,ox:0,oy:0,last:performance.now()};
   fbBuildOverlay();
+  FB.use3d=fb3Populate();
   try{ sfx('open'); }catch(e){}
   fbLoop();
  });
@@ -3587,7 +3661,10 @@ function fbBuildOverlay(){
    '<button id="fbAll" style="'+bs+'">Select All</button>'+
    '<button id="fbWith" style="'+bs+';color:#ff9a8a;border-color:#6b2e2e">Withdraw</button>'+
   '</div>'+
-  '<canvas id="fbcanvas" style="flex:1;width:100%;min-height:0;display:block;cursor:crosshair"></canvas>'+
+  '<div id="fbStage" style="position:relative;flex:1;min-height:0;background:#04050a">'+
+   '<canvas id="fbgl" style="position:absolute;inset:0;width:100%;height:100%;display:block"></canvas>'+
+   '<canvas id="fbcanvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair"></canvas>'+
+  '</div>'+
   '<div id="fbHint" style="padding:7px 14px;font-size:13px;color:#8fa2bd;background:#070a10;border-top:1px solid #1a2740">Tap a ship of yours to select, an enemy to focus fire, open space to reposition. Press Begin.</div>';
  document.body.appendChild(w);
  document.getElementById('fbBegin').onclick=function(){ if(FB.over)return; FB.paused=!FB.paused; this.textContent=FB.paused?'Resume':'Pause'; };
@@ -3603,17 +3680,29 @@ function fbShipAt(wx,wy){
   var d=Math.hypot(s.x-wx,s.y-wy); var r=(FB_SIZE[s.type]||40)*0.55; if(d<r&&d<bd){bd=d;best=s;} }
  return best;
 }
+function fbShipAtScreen(cx,cy){ var best=null,bd=1e9; for(var i=0;i<FB.ships.length;i++){ var s=FB.ships[i]; if(s.dead||s.hull<=0||s._sx==null||s._sx<-500)continue; var r=(s.type==='flag'?32:s.type==='destroyer'?26:20); var d=Math.hypot(s._sx-cx,s._sy-cy); if(d<r&&d<bd){bd=d;best=s;} } return best; }
+var _fbRay=null,_fbPlane=null,_fbHit=null;
 function fbPointer(e){
  var cv=document.getElementById('fbcanvas'); if(!cv)return; var rect=cv.getBoundingClientRect();
+ if(FB.use3d){
+  var cx=e.clientX-rect.left, cy=e.clientY-rect.top, cw=rect.width, ch=rect.height;
+  var hit=fbShipAtScreen(cx,cy);
+  if(hit&&hit.side===FB.playerSide){ FBUI.sel=new Set([hit.id]); try{sfx('click');}catch(_){}; return; }
+  if(!FBUI.sel.size)return;
+  var mx=600,my=340;
+  if(!(hit&&hit.side!==FB.playerSide)){ if(!_fbRay){_fbRay=new THREE.Raycaster();_fbPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);_fbHit=new THREE.Vector3();} _fbRay.setFromCamera({x:(cx/cw)*2-1,y:-((cy/ch)*2-1)},FB3.cam); if(_fbRay.ray.intersectPlane(_fbPlane,_fbHit)){ mx=clamp(_fbHit.x/FB3.K+600,20,1180); my=clamp(_fbHit.z/FB3.K+340,20,660); } }
+  FB.ships.forEach(function(s){ if(!FBUI.sel.has(s.id)||s.dead)return; if(hit&&hit.side!==FB.playerSide){ s.ord={k:'t',t:hit}; } else { s.ord={k:'m',x:mx,y:my}; } });
+  return;
+ }
  var wx=(e.clientX-rect.left-FBUI.ox)/FBUI.s, wy=(e.clientY-rect.top-FBUI.oy)/FBUI.s;
- var hit=fbShipAt(wx,wy);
- if(hit&&hit.side===FB.playerSide){ FBUI.sel=new Set([hit.id]); try{sfx('click');}catch(_){}; return; }
+ var hit2=fbShipAt(wx,wy);
+ if(hit2&&hit2.side===FB.playerSide){ FBUI.sel=new Set([hit2.id]); try{sfx('click');}catch(_){}; return; }
  if(!FBUI.sel.size)return;
  FB.ships.forEach(function(s){ if(!FBUI.sel.has(s.id)||s.dead)return;
-  if(hit&&hit.side!==FB.playerSide){ s.ord={k:'t',t:hit}; }
+  if(hit2&&hit2.side!==FB.playerSide){ s.ord={k:'t',t:hit2}; }
   else { s.ord={k:'m',x:wx,y:wy}; }
  });
- fbSpark(wx,wy,hit?FB_COL.B:'#cfe6ff');
+ fbSpark(wx,wy,hit2?FB_COL.B:'#cfe6ff');
 }
 function fbSpark(x,y,c){ for(var i=0;i<10;i++){var a=Math.random()*6.28,sp=40+Math.random()*70;FBUI.fx.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,t:0,life:0.5,c:c,k:'s'});} }
 function fbBoom(x,y){ FBUI.fx.push({x:x,y:y,t:0,life:0.9,k:'ring',c:'#ffd9a0'});
@@ -3623,10 +3712,11 @@ function fbLoop(){
  FBUI.raf=requestAnimationFrame(fbLoop);
  var now=performance.now(); var dt=Math.min(0.05,(now-FBUI.last)/1000); FBUI.last=now;
  if(!FB.paused&&!FB.over){ var steps=Math.max(1,Math.round(FB.speed)); for(var i=0;i<steps;i++){ fbSim(dt);
-   for(var j=0;j<FB.ships.length;j++){var s=FB.ships[j]; if(s.dead&&!s._boom){s._boom=true;fbBoom(s.x,s.y);try{sfx('rout');}catch(_){}}}
+   if(!FB.use3d){ for(var j=0;j<FB.ships.length;j++){var s=FB.ships[j]; if(s.dead&&!s._boom){s._boom=true;fbBoom(s.x,s.y);try{sfx('rout');}catch(_){}}} }
  } }
  fbTickFx(dt);
- fbDraw();
+ if(FB.use3d){ fb3Sync(dt); fb3Render(); fbDrawUI(); }
+ else fbDraw();
  if(FB.over&&!FBUI.done){ FBUI.done=true; setTimeout(fbResult,750); }
 }
 function fbDraw(){
@@ -3677,6 +3767,24 @@ function fbDraw(){
  x.fillStyle=FB_COL.A; x.font='13px JetBrains Mono,monospace'; x.textAlign='left'; x.fillText('YOUR FLEET  '+la, 14, ch-14);
  x.fillStyle=FB_COL.B; x.textAlign='right'; x.fillText(lb+'  ENEMY FLEET', cw-14, ch-14);
 }
+function fbDrawUI(){
+ var cv=document.getElementById('fbcanvas'); if(!cv)return;
+ var dpr=window.devicePixelRatio||1; var cw=cv.clientWidth,ch=cv.clientHeight;
+ if(cv.width!==Math.round(cw*dpr)||cv.height!==Math.round(ch*dpr)){cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);}
+ var x=cv.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,cw,ch);
+ for(var i=0;i<FB.ships.length;i++){ var s=FB.ships[i]; if(s.dead||s.hull<=0){s._sx=-999;continue;} var m=FB3.ships.get(s.id); if(!m||!m.visible){s._sx=-999;continue;}
+  var pr=fb3ProjectShip(m); if(pr.behind){s._sx=-999;continue;} var sx=pr.x*cw, sy=pr.y*ch; s._sx=sx; s._sy=sy;
+  var col=FB_COL[s.side]; var w2=(s.type==='flag'?46:s.type==='destroyer'?36:24); var half=w2/2;
+  if(FBUI.sel.has(s.id)){ x.strokeStyle='#e8c96a'; x.lineWidth=2; x.setLineDash([5,4]); x.beginPath(); x.arc(sx,sy,half+7,0,7); x.stroke(); x.setLineDash([]); }
+  if(s.flag){ x.fillStyle=col; x.beginPath(); x.moveTo(sx,sy-half-9); x.lineTo(sx+5,sy-half-1); x.lineTo(sx-5,sy-half-1); x.closePath(); x.fill(); }
+  var by=sy+half+3; x.fillStyle='rgba(0,0,0,0.55)'; x.fillRect(sx-half-1,by-1,w2+2,6.5);
+  x.fillStyle='#6ee07f'; x.fillRect(sx-half,by,w2*Math.max(0,s.hull/s.hullMax),3);
+  x.fillStyle='#5aa0ff'; x.fillRect(sx-half,by+3.3,w2*Math.max(0,s.crew/s.crewMax),2.3);
+ }
+ var la=fbLiving('A').length, lb=fbLiving('B').length;
+ x.fillStyle=FB_COL.A; x.font='13px JetBrains Mono,monospace'; x.textAlign='left'; x.fillText('YOUR FLEET  '+la, 14, ch-14);
+ x.fillStyle=FB_COL.B; x.textAlign='right'; x.fillText(lb+'  ENEMY FLEET', cw-14, ch-14);
+}
 function fbResult(){
  var win=FB.winner===FB.playerSide;
  var wrap=document.getElementById('fbWrap'); if(!wrap)return;
@@ -3694,7 +3802,7 @@ function fbResult(){
   fbTeardown(); if(FBUI.resolve)FBUI.resolve(res); };
  try{ sfx(win?'win':'lose'); }catch(e){}
 }
-function fbTeardown(){ if(FBUI.raf)cancelAnimationFrame(FBUI.raf); FBUI.raf=null; FB.on=false; var w=document.getElementById('fbWrap'); if(w)w.remove(); }
+function fbTeardown(){ if(FBUI.raf)cancelAnimationFrame(FBUI.raf); FBUI.raf=null; FB.on=false; fb3TeardownGL(); var w=document.getElementById('fbWrap'); if(w)w.remove(); }
 function fbSkirmish(){
  var A=[{type:'destroyer'},{type:'ripwing'},{type:'ripwing'},{type:'leech'},{type:'destroyer'},{type:'flag',flag:true}];
  var B=[{type:'destroyer'},{type:'torch'},{type:'ripwing'},{type:'leech'},{type:'destroyer'},{type:'flag',flag:true}];
