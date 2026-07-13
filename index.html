@@ -3757,6 +3757,7 @@ function bSim(dt){
     if(u.cool<=0){u.cool=u.u.siege?(6.5+rnd(0,1)):(3.1+rnd(0,0.6));fireVolley(u,rt);}
    }
   }
+  if(!u.mv&&!u.rout){ let ne=null,nds=1e9; for(const e of B.u){ if(e.side===u.side||!bAlive(e))continue; const dd=bDist(u,e); if(dd<nds){nds=dd;ne=e;} } if(ne&&nds<220)u.face=Math.atan2(ne.y-u.y,ne.x-u.x); }  /* FORMATION: a standing line turns its front to the nearest threat, so flanks must be earned by maneuver */
   u.x=clamp(u.x,26,B.W-26);u.y=clamp(u.y,26,B.H-26);
  }
  // projectiles
@@ -3955,15 +3956,17 @@ function meleeHit(a,b,dt){
  if(a.rout)return;
  const eng=Math.min(a.men,20+a.men*0.18);
  const rel=Math.atan2(a.y-b.y,a.x-b.x);
- const flank=Math.abs(angDiff(b.face,rel))>2.2&&!b.rout;
+ const _ang=Math.abs(angDiff(b.face,rel));
+ const rear=_ang>2.55&&!b.rout;        /* struck from behind: no shield, no footing, the line folds */
+ const flank=!rear&&_ang>1.25&&!b.rout; /* struck from the side */
  let dmg=a.u.atk*(a.atkMul||1)*eng*bMult(a,b)*0.05*dt*groundEdge(a,b);
  if(B.t-(a.inspired||-9)<2.2)dmg*=1.06;
  const kg=kitScore(a)-kitScore(b);
  if(kg>0)dmg*=1+0.22*Math.min(4,kg);
  if(a.hid==='pluto'&&B.t<15)dmg*=1.2;
  if(b.rout)dmg*=1.6;
- if(flank)dmg*=1.3;
- if(b.brace&&!flank)dmg*=0.55;
+ if(rear)dmg*=1.6; else if(flank)dmg*=1.3;
+ if(b.brace&&!flank&&!rear)dmg*=0.55;
  if(a.brace)dmg*=0.8;
  const k=dmg/(b.u.hp*(b.hpMul||1));
  b.men-=k;
@@ -3979,7 +3982,7 @@ function meleeHit(a,b,dt){
   }
  }
  if(Math.random()<dt*1.6)B.parts.push({x:(a.x+b.x)/2+rnd(-4,4),y:(a.y+b.y)/2+rnd(-4,4),vx:rnd(-24,24),vy:rnd(-30,-8),t:0,c:'#e2ddca'});
- b.mor-=k/b.maxMen*135*(flank?1.7:1);
+ b.mor-=k/b.maxMen*135*(rear?2.3:(flank?1.7:1));
  b.lastHit=B.t;a.lastHit=B.t;a.kills+=k;B.clash=true;
  a.face=Math.atan2(b.y-a.y,b.x-a.x);
 }
