@@ -3506,6 +3506,7 @@ function fbSim(dt){
  for(const sp of FB.ships){
   if(sp.dead||sp.hull<=0){sp.dead=true;continue;}
   const T=SHIP_TYPES[sp.type];
+  if(sp.cd>0)sp.cd-=dt;
   if(!(sp._latch&&FB.t-sp._latch<0.3))sp._drillT=0; // drill progress resets if the leech loses its grip
   if(sp.crew<=T.crew*0.18&&!sp.rout)sp.rout=true;
   if(sp.side===FB.playerSide&&sp.ord&&!sp.rout){
@@ -3523,7 +3524,9 @@ function fbSim(dt){
   if(sp.rout){ if(!(sp._latch&&FB.t-sp._latch<0.4)){ const ang=Math.atan2(sp.y-tg.y,sp.x-tg.x)+0.4;sp.x+=Math.cos(ang)*sp.spd*dt;sp.y+=Math.sin(ang)*sp.spd*dt;if(sp.x<-40||sp.x>FB.W+40||sp.y<-40||sp.y>FB.H+40)sp.dead=true; } continue; }
   const wantBoard=(sp.type==='leech')||(sp.board>sp.gun);
   const desired=wantBoard?20:sp.range*0.72;
-  if(dist>desired){const ang=Math.atan2(tg.y-sp.y,tg.x-sp.x);sp.x+=Math.cos(ang)*sp.spd*dt;sp.y+=Math.sin(ang)*sp.spd*dt;}
+  var burn=(sp._burn&&FB.t-sp._burn<2.5)?1.9:1;
+  if(dist>desired){const ang=Math.atan2(tg.y-sp.y,tg.x-sp.x);sp.x+=Math.cos(ang)*sp.spd*burn*dt;sp.y+=Math.sin(ang)*sp.spd*burn*dt;}
+  if(burn>1&&dist<34)tg.hull-=70*dt; // ramming under full burn
   // discrete weapon fire: railgun slug / missile / pulse
   sp.reload=(sp.reload==null?Math.random()*0.6:sp.reload)-dt;
   if(!sp.rout&&dist<=sp.range&&sp.reload<=0){ var wt=FB_WPN[sp.type]||FB_WPN.torch; sp.reload=wt.rof*(0.85+Math.random()*0.3);
@@ -3702,6 +3705,26 @@ function fb3Render(){ var cv=document.getElementById('fbgl'); if(!cv||!FB3.ren)r
 var _fb3v=null;
 function fb3ProjectShip(m){ if(!_fb3v)_fb3v=new THREE.Vector3(); _fb3v.copy(m.position); _fb3v.project(FB3.cam); return {x:_fb3v.x*0.5+0.5,y:-_fb3v.y*0.5+0.5,behind:_fb3v.z>1}; }
 function fb3TeardownGL(){ if(FB3.ren){ try{FB3.ren.dispose();}catch(e){} } FB3.ready=false; FB3.ren=null; FB3.scene=null; FB3._cv=null; FB3.ships=null; FB3.shipGrp=null; FB3.parts=[]; FB3.proj=[]; FB3._skin=null; }
+/* ===== Special abilities (Armada-style): one signature power per ship class, on a cooldown. ===== */
+function fbEnemiesNear(s,range,n){ var e=FB.ships.filter(function(x){return x.side!==s.side&&!x.dead&&x.hull>0&&Math.hypot(x.x-s.x,x.y-s.y)<=range;}); e.sort(function(a,b){return Math.hypot(a.x-s.x,a.y-s.y)-Math.hypot(b.x-s.x,b.y-s.y);}); return n?e.slice(0,n):e; }
+function fbFireVis(s,e,kind,crit){ if(FB3.ready){ var m=FB3.ships.get(s.id); if(m)fb3Fire(m.position,e.id,kind,s.side,crit); } }
+var FB_ABIL={
+ flag:{name:'Iron Volley',cd:15,run:function(s){ fbEnemiesNear(s,340,5).forEach(function(e){ e.hull-=95; fbFireVis(s,e,'rail',true); }); }},
+ destroyer:{name:'Focused Salvo',cd:9,run:function(s){ var e=fbEnemiesNear(s,380,1)[0]; if(e){ e.hull-=150; fbFireVis(s,e,'rail',true); } }},
+ ripwing:{name:'Missile Swarm',cd:7,run:function(s){ fbEnemiesNear(s,420,3).forEach(function(e){ e.hull-=42; fbFireVis(s,e,'missile',false); fbFireVis(s,e,'missile',false); }); }},
+ leech:{name:'Breach Charge',cd:12,run:function(s){ if(s.tgt&&!s.tgt.dead&&!s.tgt.flag&&s.tgt.side!==s.side&&Math.hypot(s.tgt.x-s.x,s.tgt.y-s.y)<42){ s.tgt._drillT=1.05; s.tgt._latch=FB.t; s.tgt._boardBy=s.side; } else { s._burn=FB.t; } }},
+ torch:{name:'Full Burn',cd:8,run:function(s){ s._burn=FB.t; }}
+};
+function fbSpecial(){
+ if(!FB.on||FB.over)return;
+ var sel=fbLiving(FB.playerSide).filter(function(s){return FBUI.sel.has(s.id);});
+ if(!sel.length)sel=fbLiving(FB.playerSide);
+ var names={},fired=0;
+ for(var i=0;i<sel.length;i++){ var s=sel[i]; if((s.cd||0)>0)continue; var ab=FB_ABIL[s.type]; if(!ab)continue; s.cd=ab.cd; try{ab.run(s);}catch(e){soft(e);} names[ab.name]=1; fired++; }
+ var h=document.getElementById('fbHint');
+ if(fired){ try{sfx('open');}catch(e){} if(h)h.textContent='Special · '+Object.keys(names).join('  ·  '); }
+ else if(h){ h.textContent='Abilities recharging...'; }
+}
 function fbBattleStart(fleetA,fleetB,opts){
  opts=opts||{};
  return new Promise(function(resolve){
@@ -3726,6 +3749,7 @@ function fbBuildOverlay(){
    '<button id="fbBegin" style="'+bs+';color:#e8c96a;border-color:#8a6e2f">Begin</button>'+
    '<button id="fbSpeed" style="'+bs+'">1x</button>'+
    '<button id="fbAll" style="'+bs+'">Select All</button>'+
+   '<button id="fbSpec" style="'+bs+';color:#e8c96a;border-color:#8a6e2f">Special (E)</button>'+
    '<button id="fbWith" style="'+bs+';color:#ff9a8a;border-color:#6b2e2e">Withdraw</button>'+
   '</div>'+
   '<div id="fbStage" style="position:relative;flex:1;min-height:0;background:#04050a">'+
@@ -3737,6 +3761,9 @@ function fbBuildOverlay(){
  document.getElementById('fbBegin').onclick=function(){ if(FB.over)return; FB.paused=!FB.paused; this.textContent=FB.paused?'Resume':'Pause'; };
  document.getElementById('fbSpeed').onclick=function(){ FB.speed=FB.speed>=4?1:FB.speed*2; this.textContent=FB.speed+'x'; };
  document.getElementById('fbAll').onclick=function(){ FBUI.sel=new Set(fbLiving(FB.playerSide).map(function(s){return s.id;})); };
+ document.getElementById('fbSpec').onclick=function(){ fbSpecial(); };
+ FBUI.keyH=function(e){ if((e.key==='e'||e.key==='E')&&document.getElementById('fbWrap')){ e.preventDefault(); fbSpecial(); } };
+ window.addEventListener('keydown',FBUI.keyH);
  document.getElementById('fbWith').onclick=function(){ if(FB.over)return; FB.over=true; FB.winner=FB.playerSide==='A'?'B':'A'; };
  var cv=document.getElementById('fbcanvas');
  cv.addEventListener('pointerdown',fbPointer);
@@ -3848,7 +3875,8 @@ function fbDrawUI(){
  for(var i=0;i<FB.ships.length;i++){ var s=FB.ships[i]; if(s.dead||s.hull<=0){s._sx=-999;continue;} var m=FB3.ships.get(s.id); if(!m||!m.visible){s._sx=-999;continue;}
   var pr=fb3ProjectShip(m); if(pr.behind){s._sx=-999;continue;} var sx=pr.x*cw, sy=pr.y*ch; s._sx=sx; s._sy=sy;
   var col=FB_COL[s.side]; var w2=(s.type==='flag'?46:s.type==='destroyer'?36:24); var half=w2/2;
-  if(FBUI.sel.has(s.id)){ x.strokeStyle='#e8c96a'; x.lineWidth=2; x.setLineDash([5,4]); x.beginPath(); x.arc(sx,sy,half+7,0,7); x.stroke(); x.setLineDash([]); }
+  if(FBUI.sel.has(s.id)){ x.strokeStyle='#e8c96a'; x.lineWidth=2; x.setLineDash([5,4]); x.beginPath(); x.arc(sx,sy,half+7,0,7); x.stroke(); x.setLineDash([]);
+   if(s.side===FB.playerSide&&FB_ABIL[s.type]){ var rdy=(s.cd||0)<=0; x.fillStyle=rdy?'#e8c96a':'rgba(232,201,106,0.32)'; x.beginPath(); x.arc(sx+half+10,sy,3.4,0,7); x.fill(); } }
   if(s.flag){ x.fillStyle=col; x.beginPath(); x.moveTo(sx,sy-half-9); x.lineTo(sx+5,sy-half-1); x.lineTo(sx-5,sy-half-1); x.closePath(); x.fill(); }
   if(s._captured&&FB.t-s._captured<2.6){ x.fillStyle='#e8c96a'; x.font='700 12px JetBrains Mono,monospace'; x.textAlign='center'; x.fillText('TAKEN',sx,sy-half-15); }
   var by=sy+half+3; x.fillStyle='rgba(0,0,0,0.55)'; x.fillRect(sx-half-1,by-1,w2+2,6.5);
@@ -3876,7 +3904,7 @@ function fbResult(){
   fbTeardown(); if(FBUI.resolve)FBUI.resolve(res); };
  try{ sfx(win?'win':'lose'); }catch(e){}
 }
-function fbTeardown(){ if(FBUI.raf)cancelAnimationFrame(FBUI.raf); FBUI.raf=null; FB.on=false; fb3TeardownGL(); var w=document.getElementById('fbWrap'); if(w)w.remove(); }
+function fbTeardown(){ if(FBUI.raf)cancelAnimationFrame(FBUI.raf); FBUI.raf=null; FB.on=false; if(FBUI.keyH)window.removeEventListener('keydown',FBUI.keyH); fb3TeardownGL(); var w=document.getElementById('fbWrap'); if(w)w.remove(); }
 function fbSkirmish(){
  var A=[{type:'destroyer'},{type:'ripwing'},{type:'ripwing'},{type:'leech'},{type:'destroyer'},{type:'flag',flag:true}];
  var B=[{type:'destroyer'},{type:'torch'},{type:'ripwing'},{type:'leech'},{type:'destroyer'},{type:'flag',flag:true}];
