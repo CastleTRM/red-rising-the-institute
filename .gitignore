@@ -1,0 +1,21 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Node (build tooling, if added later)
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# Scratch / build output
+/tmp/
+*.tmp
+dist/
+build_split.html
+the-institute_*.html
+deploy/
