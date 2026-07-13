@@ -3811,7 +3811,11 @@ async function acadGroundAssault(){
  return res;
 }
 async function acadIronRain(){
- if(ACAD.busy||ACAD.over)return; ACAD.busy=true;
+ if(ACAD.busy||ACAD.over)return;
+ // The Iron Rain is the climax: you must have earned the standing and the force to call it.
+ if(acadRank()<2&&ACAD.kills<2){ ACAD.msg='You lack the standing to call the Iron Rain. No cadet drops on the Sovereign’s own Citadel until they have broken the field: hunt the rival fleets and rise to Sub-Praetor first.'; return; }
+ if(ACAD.player.fleet.length<6){ ACAD.msg='Your fleet is too thin to break the Sovereign’s blockade. Resupply at the gold bases and gather your strength before you call the Rain.'; return; }
+ ACAD.busy=true;
  // Stage 1 — hold the void: break the Sovereign's blockade.
  var vres=await fbBattleStart(ACAD.player.fleet.slice(),acadSovereignFleet(),{title:'The Iron Rain · Break the Sovereign’s Blockade'});
  ACAD.player.fleet=vres.fleetA;
