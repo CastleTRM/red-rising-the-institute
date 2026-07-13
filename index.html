@@ -3375,7 +3375,7 @@ function campBeat(){
  }
  if(ph===2){
   if(st===0)return {title:'A Command of Your Own',text:'You are '+RANKS[CAMP.rank]+' now, or near it, and a real fleet is put in your hands against an enemy squadron. Take the void yourself, or hand the plan to your officers.',choices:[
-   {t:'Take the void and fight the engagement yourself',set:function(){const won=fbCampaignEngagement();if(won){CAMP.fav=clamp(CAMP.fav+16,0,100);CAMP.rank=Math.min(RANKS.length-1,CAMP.rank+1);CAMP.log.push('You won the void engagement in person, and your name rose.');}else{CAMP.fav=clamp(CAMP.fav-10,0,100);CAMP.alleg=clamp(CAMP.alleg+6,-100,100);CAMP.log.push('The fleet action went against you, and you learned what defeat costs.');}}},
+   {t:'Take the void and fight the engagement yourself',battle:true},
    {t:'A cautious victory won by your officers, for your patron',fav:9,alleg:-10,log:'Your officers won a careful victory in your patron\u2019s name.'},
    {t:'Bend the campaign quietly to serve your cause',fav:4,alleg:14,log:'You bent the war to your own hidden ends.'}
   ]};
@@ -3429,6 +3429,16 @@ function campBeat(){
 function campChoose(i){
  const beat=campBeat();if(!beat)return;
  const c=beat.choices[i];if(!c)return;
+ if(c.battle){
+  hideModal();
+  const _yp=1.4+CAMP.rank*0.5+(CAMP.fav-50)/60, _fp=1.6+CAMP.rank*0.4;
+  fbBattleStart(fbFleetFor(_yp,true),fbFleetFor(_fp,true),{title:'Fleet Action · '+RANKS[CAMP.rank]}).then(function(res){
+   if(res.win){CAMP.fav=clamp(CAMP.fav+16,0,100);CAMP.rank=Math.min(RANKS.length-1,CAMP.rank+1);CAMP.log.push('You won the void engagement in person, and your name rose.');}
+   else{CAMP.fav=clamp(CAMP.fav-10,0,100);CAMP.alleg=clamp(CAMP.alleg+6,-100,100);CAMP.log.push('The fleet action went against you, and you learned what defeat costs.');}
+   CAMP.step++; campAdvance();
+  });
+  return;
+ }
  if(c.fav)CAMP.fav=clamp(CAMP.fav+c.fav,0,100);
  if(c.alleg)CAMP.alleg=clamp(CAMP.alleg+c.alleg,-100,100);
  if(c.rank)CAMP.rank=clamp(CAMP.rank+c.rank,0,RANKS.length-1);
