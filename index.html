@@ -1450,7 +1450,7 @@ function renderAll(){coachCheck();renderTop();renderMapDyn();renderSide();render
    One step of every marching column that still has the legs for it.
    Returns {attack} if a column has reached a foreign border and must fight,
    {acted:true} if anything moved, or null when the valley is still.       */
-function marchStep(hid){
+function marchStep(hid,allowBattle){
  for(const d of TDEF){
   const t=T(d.id);
   if(!heldBy(t,hid)||!t.squads.length)continue;
@@ -1512,13 +1512,14 @@ function marchStep(hid){
    const tt=T(nxt);
    const heldByFoe=tt.squads.length>0&&!samecause(hid,holder(tt)||tt.owner);
    if(heldByFoe){
-    /* THIS is the fix. You told them to march somewhere. You did not tell them to
-       throw themselves at the first host they met on the way. A battle happens when
-       you ORDER one, by naming the enemy as your destination, or when they attack you. */
-    if(nxt===dest)
+    /* A battle happens when you ORDER one, by naming the enemy as your destination on
+       YOUR OWN turn. A column resuming its road at turn's start reaches the frontier and
+       HOLDS: it will not throw itself into a fight you did not command this turn.        */
+    if(nxt===dest&&allowBattle)
      return {attack:{hid:hid,from:d.id,to:nxt,squads:sq,last:true}};
     for(const q of sq)q.mp=0;
-    if(hid===G.player)log('Your column halts short of '+TER[nxt].name+'. There is a host on the road, and you did not order a battle.',hid);
+    if(nxt===dest&&!allowBattle){ for(const q of sq)q.dest=null; if(hid===G.player)log('Your column reaches the frontier at '+TER[nxt].name+' and holds. Give the order on your turn to fall on them.',hid); }
+    else if(hid===G.player)log('Your column halts short of '+TER[nxt].name+'. There is a host on the road, and you did not order a battle.',hid);
     return {acted:true};
    }
    /* empty ground, whoever owns the deeds. They simply walk onto it. The land changes
@@ -1554,11 +1555,12 @@ function marchStep(hid){
  }
  return null;
 }
-async function runMarches(hid){
+async function runMarches(hid,allowBattle){
+ if(allowBattle===undefined)allowBattle=true;
  const watch=(typeof M3!=='undefined')&&M3.on&&(typeof TURN_DELAY==='undefined'||TURN_DELAY>0);
  for(let i=0;i<60;i++){
   if(G.over)return;
-  const r=marchStep(hid);
+  const r=marchStep(hid,allowBattle);
   if(!r)return;
   if(!r.attack&&!r.sprung&&!r.intercept&&watch){ renderAll(); await sleep(520); }
   if(r.intercept){
@@ -1652,7 +1654,7 @@ async function doMarchTo(tid){
   log('The road runs through '+gauntlet.map(id=>TER[id].name+' ('+T(id).squads.length+' squads)').join(' and ')+'. They will have to cut their way through.',G.player);
  }
  G.busy=true;clearMarch();renderAll();
- await runMarches(G.player);
+ await runMarches(G.player,true);
  G.busy=false;
  const still=TDEF.filter(d=>T(d.id).owner===G.player).some(d=>T(d.id).squads.some(q=>q.dest));
  G.sel=null;G.pick=new Set();
@@ -2288,7 +2290,7 @@ async function endTurn(){
    if(G.unrest>=100)await primusChallenge();
   }
   for(const d of TDEF){const t=T(d.id);if(heldBy(t,G.player))for(const q of t.squads)q.mp=(q.stance&&q.stance!=='march')?0:(UNITS[q.type].mp||2);}
-  await runMarches(G.player);   /* the columns take up the road again */
+  await runMarches(G.player,false);   /* resume the road, but HOLD at any enemy frontier: no battle you did not order this turn */
   if(G.revealAll>0)G.revealAll--;
  }
  if(!G.over)checkVictoryDefeat();
@@ -3134,17 +3136,17 @@ function applyFieldBattle(res,ctx){
    log(HOUSES[attHid].name+' breaks the host in the open at '+TER[toId].name+'. '+fmtN(res.casB)+' fell. They hold the field, though the deeds are still '+HOUSES[dt.owner].name+"'s.",attHid);
    /* THEY ADVANCE. They stand on ground they do not own. The land does NOT change hands
       here: it changes hands when they are still standing on it at the end of the round. */
-   for(const s of res.attAlive){ s.ref.mp=0; s.ref.hid=attHid; dt.squads.push(s.ref); }
+   for(const s of res.attAlive){ s.ref.mp=Math.max(0,(s.ref.mp||0)-1); s.ref.hid=attHid; dt.squads.push(s.ref); }  /* WIN: the day is not wholly spent. Moves left, they may press on. */
    medbotHeal(res.attAlive,!!pSide,winHid);
    renderAll();checkVictoryDefeat();
    return;
   }
   log(HOUSES[attHid].name+' storms '+TER[toId].name+'. '+fmtN(res.casB)+' fell defending it, '+fmtN(res.casA)+' taking it.',attHid);
   captureTerr(toId,attHid);
-  for(const s of res.attAlive){s.ref.mp=0;dt.squads.push(s.ref);}
+  for(const s of res.attAlive){s.ref.mp=Math.max(0,(s.ref.mp||0)-1);dt.squads.push(s.ref);}  /* WIN at a castle: the stormers hold it, and may press on if the day is not spent. */
  }else{
   dt.squads=res.defAlive.map(s=>s.ref);
-  for(const s of res.attAlive){s.ref.mp=0;ft.squads.push(s.ref);}
+  for(const s of res.attAlive){s.ref.mp=0;s.ref.dest=null;ft.squads.push(s.ref);}  /* LOSS: thrown back to the ground they came from, and done for the day. */
   log(HOUSES[defHid].name+' holds '+TER[toId].name+'. The assault breaks against its line.',defHid);
  }
  medbotHeal(res.winnerSide==='A'?res.attAlive:res.defAlive,!!pSide,winHid);
