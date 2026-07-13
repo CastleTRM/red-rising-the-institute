@@ -2924,6 +2924,41 @@ async function aiTurn(hid){
 }
 
 /* ================= battle resolution plumbing ================= */
+/* ALLIES IN THE LINE (#3). Houses bound to you by alliance, blood-oath, or vassalage that
+   keep a host in a land bordering the battle send it in on your side. They fight in their
+   own colours, take their own losses, and march home after with the day spent.            */
+function gatherAllies(hid,tid,excludeFrom){
+ const out=[];
+ try{
+  if(!G||!G.dip||!ADJ[tid])return out;
+  for(const n of ADJ[tid]){
+   if(n===excludeFrom)continue;
+   const t=T(n);
+   if(!t.squads.length)continue;
+   const own=t.owner;
+   if(own===hid||own==='neutral')continue;
+   const dp=G.dip[own];
+   if(!dp||!(dp.ally||dp.oath||dp.vassal))continue;
+   if(!HS(own)||!HS(own).alive)continue;
+   for(const q of t.squads.slice()){ if((q.men||0)>=6)out.push({q:q,from:n,house:own}); }
+  }
+ }catch(e){soft(e);}
+ return out;
+}
+function returnReinforcements(){
+ try{
+  for(const d of TDEF){
+   const t=T(d.id);
+   for(let i=t.squads.length-1;i>=0;i--){
+    const q=t.squads[i];
+    if(q.reinf==null)continue;
+    t.squads.splice(i,1);
+    const home=q.reinf; delete q.reinf;
+    if(q.men>=6&&HS(q.hid)&&HS(q.hid).alive){ q.mp=0; q.dest=null; if(typeof clearLeg==='function')clearLeg(q); T(home).squads.push(q); }
+   }
+  }
+ }catch(e){soft(e);}
+}
 async function resolveAttack(attHid,fromId,toId,squads){
  const b4=(G&&HS(G.player))?HS(G.player).bonded:0;
  const loser0=(attHid===G.player)?T(toId).owner:attHid;
@@ -2985,6 +3020,20 @@ async function resolveAttackCore(attHid,fromId,toId,squads){
   renderAll();checkVictoryDefeat();
   return;
  }
+ /* #3 allied reinforcements: your bound houses with a host next door join the line */
+ const _pHid=(attHid===G.player)?attHid:((defHid===G.player)?defHid:null);
+ if(_pHid){
+  const _pAtt=(attHid===G.player);
+  const _reinf=gatherAllies(_pHid,toId,_pAtt?fromId:null);
+  const _seen={};
+  for(const r of _reinf){
+   const src=T(r.from);const ix=src.squads.indexOf(r.q);if(ix<0)continue;
+   src.squads.splice(ix,1); r.q.reinf=r.from; _seen[r.house]=1;
+   if(_pAtt)squads.push(r.q); else dt.squads.push(r.q);
+  }
+  const _hn=Object.keys(_seen);
+  if(_hn.length)log(_hn.map(h=>HOUSES[h].name).join(' and ')+(_hn.length>1?' send hosts':' sends a host')+' to fight at your side.',_pHid);
+ }
  /* An ambusher who springs the trap looses first, and the column has no line to loose back. */
  const astance=(squads[0]&&squads[0].stance)||'march';
  if(astance==='ambush'&&canAmbush(fromId)&&dt.squads.length){
@@ -3014,7 +3063,7 @@ async function resolveAttackCore(attHid,fromId,toId,squads){
   const buttons=[{t:'Fight',v:'fight',cls:'btn-gold'},{t:'Auto-resolve',v:'auto'}];
   if(attHid===G.player)buttons.push({t:'Cancel',v:'cancel'});
   mode=await ask({eyebrow:'Battle',title,body,buttons});
-  if(mode==='cancel'){for(const q of squads)ft.squads.push(q);renderAll();return;}
+  if(mode==='cancel'){for(const q of squads){if(q.reinf==null)ft.squads.push(q);}returnReinforcements();renderAll();return;}
  }
  let res;
  if(mode==='fight'){
@@ -3028,6 +3077,7 @@ async function resolveAttackCore(attHid,fromId,toId,squads){
   }
  }
  applyFieldBattle(res,{attHid,defHid,fromId,toId});
+ returnReinforcements();
 }
 function battleSummary(res,attHid,defHid){
  return HOUSES[attHid].name+' lost '+fmtN(res.casA)+' men. '+HOUSES[defHid].name+' lost '+fmtN(res.casB)+'. '
