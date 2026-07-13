@@ -1,0 +1,137 @@
+[
+ {
+  "file": "assets/menuBg.webp",
+  "bytes": 63566,
+  "key": "menuBg"
+ },
+ {
+  "file": "assets/mapBg.webp",
+  "bytes": 66360,
+  "key": "mapBg"
+ },
+ {
+  "file": "assets/p_minerva.webp",
+  "bytes": 7560,
+  "key": "p_minerva"
+ },
+ {
+  "file": "assets/mapTex.webp",
+  "bytes": 472716,
+  "key": "mapTex"
+ },
+ {
+  "file": "assets/vHeight.webp",
+  "bytes": 11570,
+  "key": "vHeight"
+ },
+ {
+  "file": "assets/platSide.webp",
+  "bytes": 36036,
+  "key": "platSide"
+ },
+ {
+  "file": "assets/olyMarble.webp",
+  "bytes": 19604,
+  "key": "olyMarble"
+ },
+ {
+  "file": "assets/olyGold.webp",
+  "bytes": 52848,
+  "key": "olyGold"
+ },
+ {
+  "file": "assets/olyStone.webp",
+  "bytes": 37164,
+  "key": "olyStone"
+ },
+ {
+  "file": "assets/olyRock.webp",
+  "bytes": 36264,
+  "key": "olyRock"
+ },
+ {
+  "file": "assets/casStone.webp",
+  "bytes": 65150,
+  "key": "casStone"
+ },
+ {
+  "file": "assets/wkTimber.webp",
+  "bytes": 39476,
+  "key": "wkTimber"
+ },
+ {
+  "file": "assets/wkThatch.webp",
+  "bytes": 71206,
+  "key": "wkThatch"
+ },
+ {
+  "file": "assets/wkEarth.webp",
+  "bytes": 50100,
+  "key": "wkEarth"
+ },
+ {
+  "file": "assets/casTimber.webp",
+  "bytes": 30934,
+  "key": "casTimber"
+ },
+ {
+  "file": "assets/wkTimber_1.webp",
+  "bytes": 40844,
+  "key": "wkTimber"
+ },
+ {
+  "file": "assets/wkThatch_1.webp",
+  "bytes": 73378,
+  "key": "wkThatch"
+ },
+ {
+  "file": "assets/wkEarth_1.webp",
+  "bytes": 51182,
+  "key": "wkEarth"
+ },
+ {
+  "file": "assets/bfHorizon.webp",
+  "bytes": 26556,
+  "key": "bfHorizon"
+ },
+ {
+  "file": "assets/bfOlympusHorizon.webp",
+  "bytes": 218178,
+  "key": "bfOlympusHorizon"
+ },
+ {
+  "file": "assets/bf_olympus_colour.webp",
+  "bytes": 117774,
+  "key": "bf_olympus_colour"
+ },
+ {
+  "file": "assets/bf_plain_colour.webp",
+  "bytes": 119302,
+  "key": "bf_plain_colour"
+ },
+ {
+  "file": "assets/bf_field_colour.webp",
+  "bytes": 111176,
+  "key": "bf_field_colour"
+ },
+ {
+  "file": "assets/bf_wood_colour.webp",
+  "bytes": 120670,
+  "key": "bf_wood_colour"
+ },
+ {
+  "file": "assets/bf_highland_colour.webp",
+  "bytes": 145742,
+  "key": "bf_highland_colour"
+ },
+ {
+  "file": "assets/bf_cave_colour.webp",
+  "bytes": 122134,
+  "key": "bf_cave_colour"
+ },
+ {
+  "file": "assets/bf_river_colour.webp",
+  "bytes": 105902,
+  "key": "bf_river_colour"
+ }
+]
