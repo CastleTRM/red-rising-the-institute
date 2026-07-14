@@ -3947,7 +3947,19 @@ const ACAD_RANKS=['Cadet','Lancer','Sub-Praetor','Praetor','Imperator'];
 function acadRank(){ var f=ACAD.fav; return f<38?0:f<58?1:f<74?2:f<90?3:4; }
 function acadFav(delta,reason){ ACAD.fav=clamp(ACAD.fav+delta,0,100); if(reason)ACAD.msg=reason;
  if(ACAD.fav<=0&&!ACAD.severed){ ACAD.severed=true; ACAD.msg='Your patron severs you. No more supply from '+ACAD.patron+', no more shield. Win the field alone, or fall.'; } }
-function acadRigCheck(){ if(ACAD.kills===2&&!ACAD.rigged){ ACAD.rigged=true; acadFav(-22,'The Sovereign fears your rise. Her hand moves against you in the Academy courts, and your favour falls hard. Doing everything right was never enough.'); } }
+function acadRigCheck(){ if(!ACAD.rigged&&(ACAD.kills>=2||(ACAD.suspicion||0)>=72)){ ACAD.rigged=true; acadSuspicion(14); acadFav(-22,'The Sovereign fears your rise. Her hand moves against you in the Academy courts, and your favour falls hard. Doing everything right was never enough.'); } }
+function acadSuspicion(d,reason){ ACAD.suspicion=clamp((ACAD.suspicion||0)+d,0,100); if(reason)ACAD.msg=reason; }
+/* The relationship web: pacts, bribes and betrayals with each rival cadet. */
+function acadDiplomacy(rvId,action){
+ var rv=null,i; for(i=0;i<ACAD.rivals.length;i++)if(ACAD.rivals[i].id===rvId)rv=ACAD.rivals[i]; if(!rv||rv.dead||ACAD.busy||ACAD.over)return;
+ if(action==='pact'){ if(rv.pact>0){ ACAD.msg='You already hold a truce with '+rv.name+'.'; }
+  else { var ch=clamp((rv.rel+50)/100+(rv.kind==='honour'?0.2:0)+(rv.kind==='schemer'?-0.15:0),0.1,0.95);
+   if(Math.random()<ch){ rv.pact=3; rv.rel=clamp(rv.rel+18,-100,100); acadFav(3); ACAD.msg=rv.name+' takes your hand. A truce holds between you for three turns.'; }
+   else { rv.rel=clamp(rv.rel-8,-100,100); ACAD.msg=rv.name+' spurns your offer, and standing sours.'; } } }
+ else if(action==='bribe'){ var cost=15; if((ACAD.req||0)<cost){ ACAD.msg='A worthy bribe costs '+cost+' requisition.'; } else { ACAD.req-=cost; rv.pact=Math.max(rv.pact||0,3); rv.rel=clamp(rv.rel+28,-100,100); ACAD.msg='Latinum changes hands. '+rv.name+' will hold off, for now.'; } }
+ else if(action==='betray'){ if(!(rv.pact>0)){ ACAD.msg='You hold no pact with '+rv.name+' to break.'; } else { rv.pact=0; rv.rel=clamp(rv.rel-55,-100,100); if(rv.fleet.length>2){ var idx=-1; for(i=0;i<rv.fleet.length;i++)if(!rv.fleet[i].flag){idx=i;break;} if(idx>=0)rv.fleet.splice(idx,1); } acadSuspicion(12); acadFav(-4); ACAD.msg='You break faith with '+rv.name+'. Your agents cripple a hull in the night, but the courts will remember your treachery.'; } }
+ if(ACAD.sel>=0)acadShowInfo(ACAD.sel);
+}
 function acadStart(){
  var names=['Ceres','Vesta','Pallas','Hygiea','Juno','Astraea','Hebe','Iris','Metis','Flora','Eunomia','Psyche','Egeria','Nemesis'];
  var N=14,nodes=[],cols=5,mw=1120,mh=520,ox=90,oy=110;
@@ -3960,7 +3972,7 @@ function acadStart(){
  var player={node:0,fleet:acadFleet(2.2),name:'Darrow'}; nodes[0].owner='player';
  var rn=['Karnus','Cassius','Antonia'],rc=['#ff6a5a','#e0a04a','#c86ad0'],rivals=[],spots=[13,9,7];
  var rkind=['brute','honour','schemer'],rpow=[2.6,2.0,1.7],rtag=['au Bellona, the brute — he hunts you and lives to break hulls','au Bellona, the honourable — he holds the field and fights fair','au Severus-Julii, the schemer — she steals ground and whispers in the courts'];
- for(var i=0;i<3;i++){ var sp=spots[i]; rivals.push({id:i,node:sp,fleet:acadFleet(rpow[i]+Math.random()*0.4),name:rn[i],dead:false,col:rc[i],kind:rkind[i],tag:rtag[i],pact:0}); nodes[sp].owner='rival'; }
+ for(var i=0;i<3;i++){ var sp=spots[i]; rivals.push({id:i,node:sp,fleet:acadFleet(rpow[i]+Math.random()*0.4),name:rn[i],dead:false,col:rc[i],kind:rkind[i],tag:rtag[i],pact:0,rel:(rkind[i]==='honour'?10:(rkind[i]==='schemer'?-10:0))}); nodes[sp].owner='rival'; }
  // The Iron Rain objective: the Sovereign's fortified moon, held by a garrison legion.
  var cN={id:N,name:'The Citadel',x:ox+mw/2,y:oy+mh/2+rnd(-10,10),base:false,owner:'sovereign',citadel:true,ptype:'citadel',r:22,links:[]};
  (function(){ var d=[]; for(var j=0;j<N;j++)d.push([Math.hypot(cN.x-nodes[j].x,cN.y-nodes[j].y),j]); d.sort(function(a,b){return a[0]-b[0];}); for(var m=0;m<2;m++){ var j=d[m][1]; cN.links.push(j); if(nodes[j].links.indexOf(N)<0)nodes[j].links.push(N); } })();
@@ -3968,7 +3980,7 @@ function acadStart(){
  var stars=[]; for(var i=0;i<220;i++)stars.push({x:Math.random()*1300,y:Math.random()*720,r:Math.random()*1.4+0.2,a:Math.random()*0.7+0.2});
  var neb=[]; for(var nb=0;nb<4;nb++)neb.push({x:Math.random()*1300,y:Math.random()*720,r:180+Math.random()*220,c:['#241a3a','#0e2a3a','#2a1a1e','#1a2a24'][nb%4],a:0.10+Math.random()*0.10});
  ACAD={on:true,turn:1,over:false,win:false,busy:false,nodes:nodes,player:player,rivals:rivals,stars:stars,neb:neb,sel:-1,hover:-1,raf:null,W:1300,H:720,s:1,ox:0,oy:0,
-  patron:pick(['House Augustus','House Bellona','House Telemanus','House Arcos','House Julii']),fav:55,kills:0,req:34,rigged:false,severed:false,endReason:'',
+  patron:pick(['House Augustus','House Bellona','House Telemanus','House Arcos','House Julii']),fav:55,kills:0,req:34,suspicion:8,rigged:false,severed:false,endReason:'',
   msg:'You begin at your home world, marked YOU ARE HERE. Click any planet to inspect it and act. Take the gold supply bases, hunt the rival cadets (their colours), and rise. The Citadel (ringed red) is the Sovereign’s fortified moon: break its blockade in the void, then call the Iron Rain and storm it.'};
  if(INSTITUTE_RECORD){ var rec=INSTITUTE_RECORD; ACAD.fromInstitute=rec;
   ACAD.fav=clamp(55+Math.round(((rec.honour||50)-50)*0.4)+(rec.route==='olympus'?12:6),34,84);
@@ -4026,6 +4038,11 @@ function acadShowInfo(nid){
   acts+='<div style="font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#8fa2bd;margin:6px 0 2px">Shipyard · tier '+tier+' · +'+(4+tier*3)+' req/turn</div>';
   for(var st in ACAD_SHIP){ var sc=ACAD_SHIP[st]; var can=(ACAD.req||0)>=sc.cost&&ACAD.player.fleet.length<12; acts+='<button data-build="'+st+'" style="'+bs+';font-size:10px;padding:8px'+(can?'':';opacity:.4')+'">Build '+sc.name+' — '+sc.cost+'</button>'; }
   var upCost=18*tier; if(tier<3)acts+='<button id="acUpg" style="'+bs+';color:#e8c96a;border-color:#8a6e2f;font-size:10px;padding:8px'+((ACAD.req||0)>=upCost?'':';opacity:.4')+'">Upgrade shipyard — '+upCost+'</button>'; }
+ if(riv&&!riv.dead){ var rel=riv.rel||0;
+  acts+='<div style="font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#8fa2bd;margin:6px 0 2px">Diplomacy · standing '+(rel>=0?'+':'')+rel+(riv.pact>0?' · truce '+riv.pact+'t':'')+'</div>';
+  if(!(riv.pact>0))acts+='<button data-dip="pact" style="'+bs+';font-size:10px;padding:8px">Offer a pact</button>';
+  acts+='<button data-dip="bribe" style="'+bs+';font-size:10px;padding:8px'+((ACAD.req||0)>=15?'':';opacity:.4')+'">Bribe — 15 req</button>';
+  if(riv.pact>0)acts+='<button data-dip="betray" style="'+bs+';color:#ff9a8a;border-color:#6b2e2e;font-size:10px;padding:8px">Betray the pact</button>'; }
  acts+='<button id="acClose" style="'+bs+';color:#8fa2bd;border-color:#1a2740">Close</button>';
  var oc=acadOwnerCol(n)||'#8fa2bd';
  acadCloseInfo();
@@ -4042,6 +4059,7 @@ function acadShowInfo(nid){
  var a=document.getElementById('acAct'); if(a)a.onclick=function(){ if(ACAD.busy||ACAD.over)return; acadCloseInfo(); ACAD.sel=-1; if(n.citadel)acadIronRain(); else acadMoveTo(nid); };
  var bb=document.getElementById('acadInfo'); if(bb){ var blds=bb.querySelectorAll('[data-build]'); for(var bi=0;bi<blds.length;bi++)(function(el){ el.onclick=function(){ if(ACAD.busy||ACAD.over)return; acadBuild(el.getAttribute('data-build')); }; })(blds[bi]); }
  var up=document.getElementById('acUpg'); if(up)up.onclick=function(){ if(ACAD.busy||ACAD.over)return; acadUpgradeBase(); };
+ if(bb&&riv){ var dips=bb.querySelectorAll('[data-dip]'); for(var di=0;di<dips.length;di++)(function(el){ el.onclick=function(){ acadDiplomacy(riv.id,el.getAttribute('data-dip')); }; })(dips[di]); }
 }
 async function acadMoveTo(target){
  if(ACAD.busy)return; ACAD.busy=true;
@@ -4049,7 +4067,7 @@ async function acadMoveTo(target){
  if(riv){
   var res=await fbBattleStart(ACAD.player.fleet.slice(),riv.fleet.slice(),{title:'Void Battle · '+ACAD.nodes[target].name});
   ACAD.player.fleet=res.fleetA;
-  if(res.win){ riv.dead=true; ACAD.nodes[target].owner='player'; if(ACAD.nodes[ACAD.player.node].owner==='player')ACAD.nodes[ACAD.player.node].owner=null; ACAD.player.node=target; ACAD.msg='You break '+riv.name+"'s fleet and take "+ACAD.nodes[target].name+'.'+(res.captured?' Your leechcraft seize '+res.captured+' enemy hull'+(res.captured>1?'s':'')+', pressed into your service.':''); ACAD.kills++; acadFav(14+(res.captured||0)*2); acadRigCheck(); }
+  if(res.win){ riv.dead=true; ACAD.nodes[target].owner='player'; if(ACAD.nodes[ACAD.player.node].owner==='player')ACAD.nodes[ACAD.player.node].owner=null; ACAD.player.node=target; ACAD.msg='You break '+riv.name+"'s fleet and take "+ACAD.nodes[target].name+'.'+(res.captured?' Your leechcraft seize '+res.captured+' enemy hull'+(res.captured>1?'s':'')+', pressed into your service.':''); ACAD.kills++; acadFav(14+(res.captured||0)*2); acadSuspicion(15); acadRigCheck(); }
   else { riv.fleet=res.fleetB.length?res.fleetB:riv.fleet; acadFav(-9); ACAD.msg='Thrown back from '+ACAD.nodes[target].name+'. Regroup and try again.'; }
  } else { if(ACAD.nodes[ACAD.player.node].owner==='player')ACAD.nodes[ACAD.player.node].owner=null; ACAD.nodes[target].owner='player'; ACAD.player.node=target; ACAD.msg='Fleet jumps to '+ACAD.nodes[target].name+'.'; }
  acadResupply();
@@ -4146,7 +4164,7 @@ async function acadRivalPhase(){
   if(t.attack&&best===ACAD.player.node){
    var res=await fbBattleStart(ACAD.player.fleet.slice(),rv.fleet.slice(),{title:rv.name+' falls on you · '+ACAD.nodes[best].name});
    ACAD.player.fleet=res.fleetA;
-   if(res.win){ rv.dead=true; ACAD.kills++; var bonus=(rv.kind==='honour')?13:9; acadFav(bonus); ACAD.msg='You beat off '+rv.name+"'s attack"+(rv.kind==='honour'?'. He salutes you as his flagship burns, and the Proctors mark your honour.':(rv.kind==='schemer'?'. Her schemes die with her fleet.':'. The brute is broken.')); acadRigCheck(); }
+   if(res.win){ rv.dead=true; ACAD.kills++; var bonus=(rv.kind==='honour')?13:9; acadFav(bonus); acadSuspicion(12); ACAD.msg='You beat off '+rv.name+"'s attack"+(rv.kind==='honour'?'. He salutes you as his flagship burns, and the Proctors mark your honour.':(rv.kind==='schemer'?'. Her schemes die with her fleet.':'. The brute is broken.')); acadRigCheck(); }
    else { acadFav(-9); rv.fleet=res.fleetB.length?res.fleetB:rv.fleet; if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; ACAD.nodes[best].owner='rival';
      var esc=pn.links.filter(function(x){return !acadRivalAt(x)&&x!==best;}); if(esc.length)ACAD.player.node=esc[0]; ACAD.msg=rv.name+' takes '+ACAD.nodes[best].name+' and drives you off.'; }
    if(acadCheckEnd()){ return; }
@@ -4266,6 +4284,7 @@ function acadDraw(){
  var bw2=170,bx2=14,by2=16; x.fillStyle='rgba(0,0,0,0.45)'; x.fillRect(bx2-2,by2-2,bw2+4,9);
  var fc=ACAD.fav<25?'#c1503a':(ACAD.fav<60?'#c9a54a':'#6ea86a'); x.fillStyle=fc; x.fillRect(bx2,by2,bw2*ACAD.fav/100,5);
  x.fillStyle='#7f8ba0'; x.font='9px JetBrains Mono,monospace'; x.textAlign='left'; x.fillText('FAVOUR OF '+ACAD.patron.toUpperCase()+(ACAD.severed?' · SEVERED':''),bx2,by2+16);
+ var sy3=by2+26; x.fillStyle='rgba(0,0,0,0.45)'; x.fillRect(bx2-2,sy3-2,bw2+4,7); var sus=ACAD.suspicion||0; x.fillStyle=(sus>=70?'#ff5a4a':(sus>=40?'#d08a3a':'#5a6a8a')); x.fillRect(bx2,sy3,bw2*sus/100,4); x.fillStyle='#7f8ba0'; x.fillText('THE SOVEREIGN’S EYE'+(ACAD.rigged?' · SHE MOVES AGAINST YOU':''),bx2,sy3+13);
  var te=document.getElementById('acadTurn'); if(te)te.textContent='Turn '+ACAD.turn+'  ·  '+ACAD_RANKS[acadRank()]+'  ·  Fleet '+ACAD.player.fleet.length+'  ·  Req '+Math.round(ACAD.req||0)+'  ·  Rivals '+alive;
  var me=document.getElementById('acadMsg'); if(me)me.textContent=ACAD.msg;
 }
