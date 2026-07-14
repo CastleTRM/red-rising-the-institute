@@ -1504,10 +1504,12 @@ function marchStep(hid,allowBattle){
     if(shadow){ caught={at:shadow,px:px,pz:pz,prog:prog}; break; }
     if(prog>=1)break;
    }
-   /* Total War rule: a host that sets out FRESH always makes at least the next tile this turn.
-      Without this a single leg can cost more movement than a fresh army owns, so it stalls on the
-      road, never arrives, and never gives battle — which read as "movement is broken" on turn one. */
-   if(!caught&&prog<1){ var _fresh=sq.every(function(q){return (q.mp||0)>=(UNITS[q.type].mp||2)-0.01;}); if(_fresh)prog=1; }
+   /* Total War rule: a host with ANY movement in hand always reaches the next tile this turn.
+      A single adjacent leg can cost more movement than a whole army's budget, so gating this on
+      being perfectly FRESH left any column that had fought or moved even once (mixed / spent mp)
+      crawling a fraction of a tile and stopping on the road — reading as "troops won't move into
+      position". Completing the leg spends the day (mp falls to 0 below), so it cannot chain on. */
+   if(!caught&&prog<1){ var _canStep=sq.every(function(q){return (q.mp||0)>0;}); if(_canStep)prog=1; }
    if(prog>0.999)prog=1;    /* 5/6 + 1/6 is not 1 in floating point, and a column must be able to ARRIVE */
    if(caught){
     for(const q of sq){ q.legFrom=d.id; q.legTo=nxt; q.legT=Math.min(0.98,Math.max(0.02,caught.prog)); q.mp=0; }
@@ -1542,7 +1544,7 @@ function marchStep(hid,allowBattle){
    }
    /* empty ground, whoever owns the deeds. They simply walk onto it. The land changes
       hands at the end of the round, if they are still standing on it.                 */
-   if(tt.squads.length+sq.length>8){ sq.forEach(q=>q.mp=0); continue; }  /* no room to quarter */
+   if(tt.squads.length+sq.length>8){ sq.forEach(q=>{q.mp=0;q.dest=null;}); if(hid===G.player)log('There is no room to quarter your column at '+TER[nxt].name+'. It can hold no more than eight squads.',hid); continue; }  /* no room to quarter — say so, and drop the dead order */
    const lead=sq.some(q=>UNITS[q.type].lead), slow=sq.length>=4&&!lead;
    t.squads=t.squads.filter(q=>sq.indexOf(q)<0);
    MARCH_FX[nxt]=d.id;                       /* they walk in from here */
