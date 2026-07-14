@@ -1321,6 +1321,9 @@ function renderSide(){
  const own=t.owner===G.player;            /* the DEEDS: who may muster and build here */
  const hold=holder(t)||t.owner;           /* the MEN: who is actually standing on it */
  const mine=heldBy(t,G.player);           /* are they MINE? */
+ const inTransit=q=>!!(q.legTo&&(q.legT||0)>0&&(q.legT||0)<1);   /* on the road, gone from this seat */
+ const here=t.squads.filter(q=>!inTransit(q)), onRoad=t.squads.filter(inTransit);
+ const cmd=mine&&here.length>0;           /* give orders only when squads are actually standing here */
  const vis=forceSeen(G.sel)||fogState(G.sel)==='vis';
  const hd=HOUSES[hold];
  let html='<div class="sp-title">'+d.name+'</div><div class="sp-sub">'+TERRNAME[d.terr]+' \u00b7 '+d.inc+' supplies'+((d.iron||0)?' \u00b7 '+d.iron+' iron':'')+' a turn'+(d.castleOf?' \u00b7 Castle of '+HOUSES[d.castleOf].name:'')+'</div>';
@@ -1328,21 +1331,30 @@ function renderSide(){
  html+='<div class="sp-h">Forces</div>';
  if(!vis)html+='<p class="hintline" style="margin-top:0">Strength unknown. Hold a bordering land to see inside.</p>';
  else if(!t.squads.length)html+='<p class="hintline" style="margin-top:0">Undefended.</p>';
- else for(const q of t.squads){
-  const u=UNITS[q.type];const pct=clamp(q.men/u.men*100,4,100);
-  html+='<div class="sqrow '+((q.mp||0)<=0&&mine?'moved':'')+'">';
-  if(mine)html+='<input type="checkbox" data-sq="'+q.id+'" '+(G.pick.has(q.id)?'checked':'')+' '+((q.mp||0)>0?'':'disabled')+'>';
-  html+='<img class="pface" src="'+portraitFor(q.type,t.owner,q.kit)+'"><div class="sqi"><div class="nm"><b>'+(q.type==='champion'?champName(t.owner):u.name)+'</b><span>'+fmtN(q.men)+' men'+(own?' \u00b7 '+'\u25c6'.repeat(Math.max(0,q.mp||0))+'\u25c7'.repeat(Math.max(0,(UNITS[q.type].mp||2)-Math.max(0,q.mp||0))):'')+kitTags(q)+'</span></div><div class="sqbar"><i style="width:'+pct+'%;background:'+hd.color+'"></i></div></div></div>';
+ else{
+  if(!here.length&&onRoad.length)html+='<p class="hintline" style="margin-top:0">The garrison has taken the road. This seat stands empty of men.</p>';
+  for(const q of here){
+   const u=UNITS[q.type];const pct=clamp(q.men/u.men*100,4,100);
+   html+='<div class="sqrow '+((q.mp||0)<=0&&mine?'moved':'')+'">';
+   if(mine)html+='<input type="checkbox" data-sq="'+q.id+'" '+(G.pick.has(q.id)?'checked':'')+' '+((q.mp||0)>0?'':'disabled')+'>';
+   html+='<img class="pface" src="'+portraitFor(q.type,t.owner,q.kit)+'"><div class="sqi"><div class="nm"><b>'+(q.type==='champion'?champName(t.owner):u.name)+'</b><span>'+fmtN(q.men)+' men'+(own?' \u00b7 '+'\u25c6'.repeat(Math.max(0,q.mp||0))+'\u25c7'.repeat(Math.max(0,(UNITS[q.type].mp||2)-Math.max(0,q.mp||0))):'')+kitTags(q)+'</span></div><div class="sqbar"><i style="width:'+pct+'%;background:'+hd.color+'"></i></div></div></div>';
+  }
+  if(onRoad.length){
+   html+='<div class="sp-h" style="margin-top:10px">On the march</div>';
+   for(const q of onRoad){ const u=UNITS[q.type];const pct=clamp(q.men/u.men*100,4,100);
+    html+='<div class="sqrow" style="opacity:.72"><img class="pface" src="'+portraitFor(q.type,t.owner,q.kit)+'"><div class="sqi"><div class="nm"><b>'+(q.type==='champion'?champName(t.owner):u.name)+'</b><span>'+fmtN(q.men)+' men \u00b7 marching for '+(q.dest&&TER[q.dest]?TER[q.dest].name:'the road')+'</span></div><div class="sqbar"><i style="width:'+pct+'%;background:'+hd.color+'"></i></div></div></div>';
+   }
+  }
  }
  /* An army may be commanded wherever it stands. Mustering and building need the deeds. */
- if(mine&&!own){
+ if(cmd&&!own){
   html+='<p class="hintline" style="margin-top:0">Your men hold this ground. The deeds are still '+HOUSES[t.owner].name+"'s: stand here when the round closes and it is yours.</p>";
  }
- if(mine){
+ if(cmd){
   if(G.marchMode){
    html+='<p class="hintline">Name any land in the valley. Your column will take the road and march for it, over as many turns as it needs.</p><div class="sidebtns"><button class="btn btn-sm" id="btnCancelMarch">Cancel March</button></div>';
   }else{
-   const canMove=t.squads.some(q=>(q.mp||0)>0);
+   const canMove=here.some(q=>(q.mp||0)>0);
    html+='<div class="sidebtns"><button class="btn btn-gold btn-sm" id="btnMarch" '+(canMove&&G.pick.size?'':'disabled')+'>March</button><button class="btn btn-sm" id="btnMerge" '+(canMergePick(t)?'':'disabled')+'>Merge</button>'+(isCastle(G.sel)?'<button class="btn btn-sm" id="btnArmory" '+(G.pick.size?'':'disabled')+'>Armory</button>':'')+(((ownedCastles(G.player).length>=6&&!G.olympusWon))?'<button class="btn btn-sm" id="btnOlympus" '+(canMove&&G.pick.size?'':'disabled')+'>Assault Olympus</button>':'')+'</div>';
    html+='<div class="sp-h" style="margin-top:10px">Stance</div>'
      +'<div class="sidebtns">'
@@ -1353,7 +1365,10 @@ function renderSide(){
      +'<p class="hintline">'+(stanceOf(t)==='fortify'?'Dug in. They will not move, and they will be hard to shift.'
        :(stanceOf(t)==='ambush'?'Lying in the trees. The valley cannot see them, and the first an enemy knows of them is the volley.'
        :(canAmbush(G.sel)?'On the road. In wood or cave they may lie in ambush instead.':'On the road. Only wood and cave will hide a host.')))+'</p>';
-   if(own&&isCastle(G.sel)){
+  }
+ }
+ /* Territory management belongs to the deeds, not the men: a castle you hold musters and builds even with the army marched away. */
+ if(own&&isCastle(G.sel)){
     html+='<div class="sp-h">Muster</div>';
     if(t.squads.length>=8)html+='<p class="hintline" style="margin-top:0">The castle yards are full. March squads out to make room.</p>';
     else for(const u of availUnits(G.player,G.sel)){
@@ -1363,7 +1378,7 @@ function renderSide(){
      const afford=HS(G.player).supplies>=mc&&HS(G.player).bonded>=bc&&HS(G.player).iron>=ic;
      html+='<div class="recrow"><img class="pface" src="'+portraitFor(u.key,G.player,{})+'"><button class="btn btn-sm" data-rec="'+u.key+'" '+(afford?'':'disabled')+'>'+u.name+'</button><div class="recinfo"><b>'+mc+' supplies'+(ic?' + '+ic+' iron':'')+(bc?' + '+bc+' Bonded':'')+' \u00b7 '+fmtN(u.men)+' men</b><br>'+u.desc+statBars(u)+'</div></div>';
     }
-    if(own)html+='<div class="sp-h">Works</div>';
+    html+='<div class="sp-h">Works</div>';
     for(const bk of BLD_ORDER){
      const bd=BUILDINGS[bk],lv=t.bld[bk]||0;
      if(lv>=bd.max){html+='<div class="bldrow"><button class="btn btn-sm" disabled>'+bd.name+(bd.max>1?' '+roman(lv):'')+'</button><div class="recinfo"><b>Complete</b><br>'+bd.desc+'</div></div>';continue;}
@@ -1371,8 +1386,7 @@ function renderSide(){
      const canB=HS(G.player).supplies>=cost;
      html+='<div class="bldrow"><button class="btn btn-sm" data-bld="'+bk+'" '+(canB?'':'disabled')+'>'+(lv>0?'Raise ':'Build ')+bd.name+'</button><div class="recinfo"><b>'+cost+' supplies'+(bd.max>1?' \u00b7 tier '+roman(lv+1):'')+'</b><br>'+bd.desc+'</div></div>';
     }
-   } else {
-    html+='<p class="hintline">Squads muster only at castles you hold.</p>';
+ } else if((own||cmd)&&!isCastle(G.sel)){
     html+='<div class="sp-h">Field Works</div>';
     if(t.fw){
      const fwd=FIELDWORKS[t.fw];
@@ -1383,8 +1397,6 @@ function renderSide(){
      const can=HS(G.player).supplies>=fwd.cost;
      html+='<div class="bldrow"><button class="btn btn-sm" data-fw="'+fk+'" '+(can?'':'disabled')+'>Build '+fwd.name+'</button><div class="recinfo"><b>'+fwd.cost+' supplies \u00b7 one work per land</b><br>'+fwd.desc+'</div></div>';
     }
-   }
-  }
  }
  S.innerHTML=html;
  $$('#side input[data-sq]').forEach(cb=>cb.addEventListener('change',()=>{const id=+cb.dataset.sq;if(cb.checked)G.pick.add(id);else G.pick.delete(id);renderSide();}));
