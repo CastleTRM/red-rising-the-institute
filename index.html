@@ -5781,10 +5781,11 @@ var SCALE=7.0, PERUNIT=6, FIELD=36, YAW=0.0;
 function load(){ if(loading||ready||!window.THREE||!THREE.GLTFLoader)return; loading=true; try{ new THREE.GLTFLoader().load("spartan-lite.glb",function(g){ tmpl=g.scene; (g.animations||[]).forEach(function(c){clips[c.name]=c;}); ready=true; },undefined,function(){loading=false;}); }catch(e){loading=false;} }
 function isFoot(t){return enabled&&!!FOOT[t];}
 function tick(){ try{ if(!enabled)return; if(!ready){load();return;} var now=((window.performance&&performance.now)?performance.now():Date.now())/1000; var dt=last?Math.min(0.06,now-last):0; last=now; for(var i=0;i<mixers.length;i++)mixers[i].update(dt); }catch(e){} }
-function make(hid){ if(!ready||!(window.THREE&&THREE.SkeletonUtils))return null; var obj=THREE.SkeletonUtils.clone(tmpl); obj.scale.setScalar(SCALE); obj.traverse(function(o){ if(o.isMesh){o.frustumCulled=false; if(o.material){o.material=o.material.clone(); if(o.material.name&&o.material.name.indexOf("Armor7")>=0){try{o.material.color=new THREE.Color((HOUSES[hid]||HOUSES.neutral).color);}catch(e){}}}}}); var mx=new THREE.AnimationMixer(obj); mixers.push(mx); var acts={}; for(var k in clips){acts[k]=mx.clipAction(clips[k]);} var cur=null; function setState(n){var a=acts[n]||acts.idle; if(!a||a===cur)return; if(cur)cur.fadeOut(0.15); a.reset().fadeIn(0.15).play(); cur=a;} setState("idle"); return {obj:obj,setState:setState}; }
+function make(hid){ if(!ready||!(window.THREE&&THREE.SkeletonUtils))return null; var obj=THREE.SkeletonUtils.clone(tmpl); obj.scale.setScalar(SCALE); obj.traverse(function(o){ if(o.isMesh){o.frustumCulled=false; if(o.material){o.material=o.material.clone(); if(o.material.name&&o.material.name.indexOf("Armor7")>=0){try{o.material.color=new THREE.Color((HOUSES[hid]||HOUSES.neutral).color);}catch(e){}}}}}); var mx=new THREE.AnimationMixer(obj); mixers.push(mx); var acts={}; for(var k in clips){acts[k]=mx.clipAction(clips[k]);} var cur=null; function setState(n){var a=acts[n]||acts.idle; if(!a||a===cur)return; if(cur)cur.fadeOut(0.15); a.reset().fadeIn(0.15).play(); cur=a;} setState("idle"); return {obj:obj,setState:setState,_mx:mx}; }
+function drop(sN){ if(sN&&sN._mx){ var i=mixers.indexOf(sN._mx); if(i>=0)mixers.splice(i,1); } }
 function clearAll(){ mixers.length=0; last=0; }
 function renderUnit(rec,u,show,sinF,cosF){ try{ if(!ready)return false; if(!rec.s3d)rec.s3d=[]; var want=Math.min(show,PERUNIT); var st=u.rout?"death":(u.mv?"march":(((B.t-(u.lastHit||-9))<0.5)?"attack":"idle")); var gy=b3H(u.x,u.y), face=-u.face+YAW; for(var i=0;i<want;i++){ var sN=rec.s3d[i]; if(!sN){ if(mixers.length>=FIELD)break; sN=make(u.hid); if(!sN)break; B3.unitGrp.add(sN.obj); rec.s3d[i]=sN; } var o=u.offs[i]; sN.obj.position.set(u.x-o.x*sinF-o.y*cosF-600, gy, u.y+o.x*cosF-o.y*sinF-340); sN.obj.rotation.y=face; sN.obj.visible=true; sN.setState(st); } for(var j=want;j<rec.s3d.length;j++)rec.s3d[j].obj.visible=false; if(rec.s3d.length>0){ rec.inst.visible=false; if(rec.spr){for(var q=0;q<rec.spr.length;q++)rec.spr[q].visible=false;} return true; } return false; }catch(e){ return false; } }
-return { get enabled(){return enabled;}, set enabled(v){enabled=v;}, get ready(){return ready;}, load:load, tick:tick, isFoot:isFoot, renderUnit:renderUnit, clearAll:clearAll, cfg:function(o){o=o||{};if(o.scale!=null)SCALE=o.scale;if(o.per!=null)PERUNIT=o.per;if(o.field!=null)FIELD=o.field;if(o.yaw!=null)YAW=o.yaw;} };
+return { get enabled(){return enabled;}, set enabled(v){enabled=v;}, get ready(){return ready;}, load:load, tick:tick, make:make, drop:drop, isFoot:isFoot, renderUnit:renderUnit, clearAll:clearAll, cfg:function(o){o=o||{};if(o.scale!=null)SCALE=o.scale;if(o.per!=null)PERUNIT=o.per;if(o.field!=null)FIELD=o.field;if(o.yaw!=null)YAW=o.yaw;} };
 })();
 function b3Frame(){if(window.INSTITUTE_3D)INSTITUTE_3D.tick();
  if(!B3.ready)return;
@@ -6557,6 +6558,7 @@ function m3Routes(){
 const MARCH_FX={};                 /* toTile -> fromTile, so a new column walks in from the right side */
 const ARMY_SCALE=2.0;              /* a land is ~200 units across. An army must read at that scale. */
 const ARMY_LOD_RAD=1300;           /* closer than this (or selected), the single token unpacks into the column */
+var M3_CHAR_SCALE=3.4, M3_CHAR_YAW=0, M3_CHAR_CAP=20;   /* one animated 3D general per army on the campaign map, Total War style */
 /* ============ THE SIGNUM ============
    Not a flag on a stick. A Roman signum militaria: a shaft crowned with a spearhead
    and a wreath, hung with phalerae, and carrying a VEXILLUM, a square of cloth that
@@ -6721,7 +6723,7 @@ function m3Armies(){
   const hh=holder(t)||t.owner;                 /* WHOSE column is this? Not whose field. */
   const key=show?(hh+':'+t.squads.map(q=>q.type).join('.')+':'+stanceOf(t)):'';
   const rec=M3.army[id];
-  if(!show){ if(rec){M3.armyGrp.remove(rec.grp);delete M3.army[id];} continue; }
+  if(!show){ if(rec){ if(rec._lead3d&&window.INSTITUTE_3D){INSTITUTE_3D.drop(rec._lead3d);M3._nchar=Math.max(0,(M3._nchar||0)-1);} M3.armyGrp.remove(rec.grp);delete M3.army[id];} continue; }
   const ter=TER[id];
   let h=terrH(ter.cx-700,ter.cy-500);
   let cx=ter.cx-700, cz=ter.cy-500;
@@ -6733,7 +6735,7 @@ function m3Armies(){
   }
   else if(isCastle(id)){ cx+=12; cz+=20; }   /* a garrison musters in the courtyard, before the keep, not on top of it */
   if(!rec||rec.key!==key){
-   if(rec)M3.armyGrp.remove(rec.grp);
+   if(rec){ if(rec._lead3d&&window.INSTITUTE_3D){INSTITUTE_3D.drop(rec._lead3d);M3._nchar=Math.max(0,(M3._nchar||0)-1);} M3.armyGrp.remove(rec.grp); }
    const grp=m3ArmyGeo(hh,t.squads);
    /* did this column just walk in from somewhere? then start it there and let it walk */
    const from=MARCH_FX[id];
@@ -6743,7 +6745,7 @@ function m3Armies(){
    grp.userData.pickId=id;                 /* so a click on the column finds the column */
    grp.position.set(sx,h+2,cz===undefined?0:sz);
    M3.armyGrp.add(grp);
-   M3.army[id]={grp:grp,key:key,cur:{x:sx,z:sz},tgt:{x:cx,z:cz},y:h+2};
+   M3.army[id]={grp:grp,key:key,cur:{x:sx,z:sz},tgt:{x:cx,z:cz},y:h+2,hid:hh};
   }else{
    rec.tgt.x=cx; rec.tgt.z=cz; rec.y=h+2;
   }
@@ -6768,6 +6770,9 @@ function m3ArmyWalk(){
    a.grp.position.y=a.y+Math.abs(Math.sin(M3.clock*7))*0.9;   /* the tramp of feet */
   }else{ a.cur.x=a.tgt.x; a.cur.z=a.tgt.z; a.grp.position.y=a.y; }
   a.grp.position.x=a.cur.x; a.grp.position.z=a.cur.z;
+  /* Total War: swap the plain lead token for one animated 3D general once the model has loaded. */
+  if(window.INSTITUTE_3D&&INSTITUTE_3D.ready&&ud&&ud.lead&&!a._lead3d&&(M3._nchar||0)<M3_CHAR_CAP){ var s3=INSTITUTE_3D.make(a.hid); if(s3){ while(ud.lead.children.length)ud.lead.remove(ud.lead.children[0]); s3.obj.scale.setScalar(M3_CHAR_SCALE); s3.obj.rotation.y=M3_CHAR_YAW; ud.lead.add(s3.obj); a._lead3d=s3; M3._nchar=(M3._nchar||0)+1; } }
+  if(a._lead3d)a._lead3d.setState(dist>0.6?'march':'idle');
   const fl=a.grp.userData&&a.grp.userData.flag;
   if(fl)fl.rotation.y=Math.sin(M3.clock*1.6)*0.09;           /* a hung vexillum stirs, it does not flap */
  }
@@ -7156,6 +7161,7 @@ function m3Loop(){
  if(cv.width!==Math.round(w*pr2)||cv.height!==Math.round(h2*pr2))M3.ren.setSize(w,h2,false);
  M3.cam.aspect=w/h2;M3.cam.updateProjectionMatrix();
  m3Ease();
+ if(window.INSTITUTE_3D)INSTITUTE_3D.tick();   /* loads the glb and drives the campaign generals' animation */
  m3ArmyWalk();
  if(!M3.userZoom&&Math.abs((M3.lastAspect||0)-M3.cam.aspect)>0.002){M3.lastAspect=M3.cam.aspect;m3Fit(M3.cam.aspect);}
  M3.clock+=0.016;
