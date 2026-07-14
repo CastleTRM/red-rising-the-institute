@@ -3519,6 +3519,7 @@ function fbSim(dt){
   if(sp.dead||sp.hull<=0){sp.dead=true;continue;}
   const T=SHIP_TYPES[sp.type];
   if(sp.cd>0)sp.cd-=dt;
+  else if(sp.side!==FB.playerSide&&!sp.rout&&FB_ABIL[sp.type]&&fbEnemiesNear(sp,370,1).length){ var _ab=FB_ABIL[sp.type]; sp.cd=_ab.cd; try{_ab.run(sp);}catch(e){} }   /* the enemy fights with the same tricks you do */
   if(!(sp._latch&&FB.t-sp._latch<0.3))sp._drillT=0; // drill progress resets if the leech loses its grip
   if(sp.crew<=T.crew*0.18&&!sp.rout)sp.rout=true;
   if(sp.side===FB.playerSide&&sp.ord&&!sp.rout){
@@ -4127,6 +4128,15 @@ function acadRivalTarget(rv){
  var bs=nearest(openBases); if(bs>=0)return {best:bs,attack:false};
  return {best:toward(),attack:false};
 }
+/* Rivals earn and build between turns, each to their temperament: the brute stacks warships,
+   the schemer stacks leechcraft to board and steal your hulls, the honourable builds a balanced line. */
+function acadRivalEconomy(rv){
+ rv.req=(rv.req||8)+3+Math.floor(ACAD.turn/3);
+ var cap=8+Math.floor(ACAD.turn/4), guard=0;
+ while(rv.fleet.length<cap&&rv.req>=12&&guard++<6){ rv.req-=12;
+  var t=rv.kind==='brute'?pick(['destroyer','destroyer','ripwing']):(rv.kind==='schemer'?pick(['leech','leech','ripwing']):pick(['destroyer','ripwing','leech']));
+  rv.fleet.splice(Math.max(0,rv.fleet.length-1),0,{type:t}); }
+}
 async function acadRivalPhase(){
  ACAD.busy=true;
  for(var i=0;i<ACAD.rivals.length;i++){
@@ -4140,7 +4150,8 @@ async function acadRivalPhase(){
    else { acadFav(-9); rv.fleet=res.fleetB.length?res.fleetB:rv.fleet; if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; ACAD.nodes[best].owner='rival';
      var esc=pn.links.filter(function(x){return !acadRivalAt(x)&&x!==best;}); if(esc.length)ACAD.player.node=esc[0]; ACAD.msg=rv.name+' takes '+ACAD.nodes[best].name+' and drives you off.'; }
    if(acadCheckEnd()){ return; }
-  } else { if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; if(!ACAD.nodes[best].owner)ACAD.nodes[best].owner='rival'; if(ACAD.nodes[best].base&&rv.fleet.length<10)rv.fleet.push({type:pick(['ripwing','leech','destroyer'])}); if(rv.kind==='brute'&&rv.fleet.length<11&&Math.random()<0.6)rv.fleet.push({type:pick(['destroyer','ripwing'])}); }
+  } else { if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; if(!ACAD.nodes[best].owner)ACAD.nodes[best].owner='rival'; }
+  if(!rv.dead)acadRivalEconomy(rv);
  }
  ACAD.turn++;
  var inc=acadIncome(); if(inc&&acadMyBases().length)ACAD.msg=(ACAD.msg?ACAD.msg+' ':'')+'Your '+acadMyBases().length+' shipyard'+(acadMyBases().length>1?'s':'')+' yield '+inc+' requisition.';
