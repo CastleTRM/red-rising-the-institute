@@ -952,6 +952,7 @@ function newGame(playerHid,custom){
   }
   G.terr[d.id]=t;
  }
+ buildTracks();          /* lay the arteries: castle approaches and open-country fast lanes */
 }
 const T=id=>G.terr[id];
 const HS=id=>G.houses[id];
@@ -1065,12 +1066,22 @@ function ambushing(id,viewer){
    Total War does not count squares. An army has a budget of DISTANCE, it walks a road,
    and it stops wherever that budget runs out, which is usually in the middle of a field.
    The valley is 1409 by 1026 world units across, so these are real distances.          */
-const LEAGUE=170;                     /* world units per point of movement */
-const MOVECOST={plain:1,field:1,wood:2,cave:2,highland:2,river:2};
+const LEAGUE=185;                     /* world units per point of movement */
+/* Cross-country ground is heavier than open field, but a column must still clear ONE full
+   leg of it in a turn: at 2x the worst legs cost more than a foot army's whole budget, so a
+   third of the map was impassable to infantry. 1.4x keeps rough ground slow without freezing it. */
+const MOVECOST={plain:1,field:1,wood:1.4,cave:1.4,highland:1.4,river:1.4};
 function tpos(id){ const t=TER[id]; return {x:t.cx-700,z:t.cy-500}; }
 function tdist(a,b){ const p=tpos(a),q=tpos(b); return Math.hypot(p.x-q.x,p.z-q.z); }
-/* the cost of a leg is its real length, made heavier by the ground it crosses */
-function legCost(from,to){ return tdist(from,to)*(ROADS[to]?1:(MOVECOST[TERR_OF[to]]||1)); }
+/* Roads and tracks are ROUTES between two lands, not a property of one. A great road is always
+   swift (1x); a beaten track is a fast lane through rough country (1.2x); otherwise you pay for
+   the ground you cross. This is what gives the map arteries instead of one flat crossing cost. */
+function edgeKey(a,b){ return a<b?a+'|'+b:b+'|'+a; }
+function legCost(from,to){
+ if(ROADS[to]||ROADS[from])return tdist(from,to)*1.0;
+ if(typeof TRACKS!=='undefined'&&TRACKS[edgeKey(from,to)])return tdist(from,to)*1.2;
+ return tdist(from,to)*(MOVECOST[TERR_OF[to]]||1);
+}
 function budgetOf(q){ return (q.mp||0)*LEAGUE; }
 /* where is this column ACTUALLY standing? Not which square: where. */
 function armyPos(t){
@@ -1084,6 +1095,20 @@ function armyPos(t){
 }
 function clearLeg(q){ q.legFrom=null; q.legTo=null; q.legT=0; }
 const ROADS={trade_road:1,pilgrim_road:1,greenway:1};   /* the great roads: always swift */
+/* TRACKS are beaten paths between two named lands — the arteries that keep a host flowing.
+   Built once the graph exists: every approach to a castle is a track (a keep is never stranded),
+   and every run of open country between two fields is a track (natural roads across the plain). */
+let TRACKS={};
+function buildTracks(){
+ TRACKS={}; if(typeof ADJ==='undefined')return;
+ const open={plain:1,field:1};
+ for(const d of TDEF){ const a=d.id; for(const b of (ADJ[a]||[])){
+  if(ROADS[a]||ROADS[b])continue;                              /* already a great road */
+  const castleApproach=isCastle(a)||isCastle(b);              /* every keep gets a road in */
+  const openCorridor=open[TERR_OF[a]]&&open[TERR_OF[b]];      /* fast lanes across open ground */
+  if(castleApproach||openCorridor)TRACKS[edgeKey(a,b)]=1;
+ }}
+}
 function stepCost(id){ if(ROADS[id])return 1; return MOVECOST[TERR_OF[id]]||1; }
 function samecause(a,b){ if(a===b)return true;
  const dp=(G&&G.dip&&G.dip[b])||null; return !!(dp&&dp.ally); }
@@ -6556,6 +6581,71 @@ function m3Routes(){
   }
  }
 }
+/* ============ REACHABLE THIS TURN ============
+   Total War's single biggest flow aid: when you take an army in hand, the map shows you
+   where it can go. Green = this turn, amber = the turn after. Dijkstra over real leg costs. */
+function marchReach(from,budget,freshBudget){
+ const dist={}; dist[from]=0;
+ const done={};
+ for(let i=0;i<TDEF.length+2;i++){
+  let u=null,best=Infinity;
+  for(const d of TDEF){const n=d.id; if(!done[n]&&dist[n]!==undefined&&dist[n]<best){best=dist[n];u=n;}}
+  if(u===null)break; done[u]=true;
+  for(const v of (ADJ[u]||[])){
+   if(done[v])continue;
+   const nd=dist[u]+legCost(u,v);
+   if(dist[v]===undefined||nd<dist[v])dist[v]=nd;
+  }
+ }
+ const now=new Set(), next=new Set();
+ /* the one-leg guarantee: any direct neighbour is always reachable this turn */
+ for(const v of (ADJ[from]||[]))now.add(v);
+ for(const id in dist){
+  if(id===from)continue;
+  if(dist[id]<=budget)now.add(id);
+  else if(dist[id]<=budget+freshBudget)next.add(id);
+ }
+ for(const id of now)next.delete(id);
+ return {now,next};
+}
+function m3Reach(){
+ if(!M3.scene)return;
+ if(!M3.reachGrp){M3.reachGrp=new THREE.Group();M3.scene.add(M3.reachGrp);}
+ const g=M3.reachGrp;
+ /* only when a movable player army is in hand */
+ let show=false, from=null, budget=0, fresh=0;
+ if(G&&G.sel&&!G.busy&&!G.over){
+  const t=T(G.sel);
+  if(t&&heldBy(t,G.player)&&t.squads.length){
+   const picked=G.pick&&G.pick.size?t.squads.filter(q=>G.pick.has(q.id)):t.squads;
+   const movable=picked.filter(q=>(q.mp||0)>0);
+   if(movable.length){
+    show=true; from=G.sel;
+    budget=Math.min.apply(null,movable.map(q=>budgetOf(q)));
+    fresh=Math.min.apply(null,movable.map(q=>(UNITS[q.type].mp||2)*LEAGUE));
+   }
+  }
+ }
+ const key=show?(from+':'+budget.toFixed(0)+':'+fresh.toFixed(0)+':'+(G.turn||0)):'';
+ if(key===M3.reachKey)return;                 /* nothing changed: leave the discs be */
+ M3.reachKey=key;
+ while(g.children.length){const c=g.children[0];g.remove(c);if(c.geometry)c.geometry.dispose();if(c.material)c.material.dispose();}
+ if(!show)return;
+ const R=marchReach(from,budget,fresh);
+ const paint=(id,col,op)=>{
+  if(fogState(id)==='hidden')return;          /* do not reveal ground you cannot see */
+  const te=TER[id]; if(!te)return;
+  const x=te.cx-700, z=te.cy-500, y=terrH(x,z);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(20,30,28),
+   new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op,side:THREE.DoubleSide,depthWrite:false}));
+  ring.rotation.x=-Math.PI/2; ring.position.set(x,y+6,z); g.add(ring);
+  const disc=new THREE.Mesh(new THREE.CircleGeometry(20,24),
+   new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op*0.28,side:THREE.DoubleSide,depthWrite:false}));
+  disc.rotation.x=-Math.PI/2; disc.position.set(x,y+5,z); g.add(disc);
+ };
+ R.next.forEach(id=>paint(id,0xe0b040,0.5));   /* amber: the turn after */
+ R.now.forEach(id=>paint(id,0x6ad46a,0.75));    /* green: this turn */
+}
 /* ---- the column itself: a physical thing that stands on the land ---- */
 const MARCH_FX={};                 /* toTile -> fromTile, so a new column walks in from the right side */
 const ARMY_SCALE=2.0;              /* a land is ~200 units across. An army must read at that scale. */
@@ -7171,6 +7261,7 @@ function m3Loop(){
  m3Ease();
  if(window.INSTITUTE_3D)INSTITUTE_3D.tick();   /* loads the glb and drives the campaign generals' animation */
  m3ArmyWalk();
+ m3Reach();                                    /* show where the army in hand can go, this turn and next */
  if(!M3.userZoom&&Math.abs((M3.lastAspect||0)-M3.cam.aspect)>0.002){M3.lastAspect=M3.cam.aspect;m3Fit(M3.cam.aspect);}
  M3.clock+=0.016;
  M3.cam.position.set(M3.tgt.x+M3.rad*Math.sin(M3.pol)*Math.sin(M3.az),M3.tgt.y+M3.rad*Math.cos(M3.pol),M3.tgt.z+M3.rad*Math.sin(M3.pol)*Math.cos(M3.az));
