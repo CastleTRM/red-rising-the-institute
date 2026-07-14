@@ -1504,6 +1504,10 @@ function marchStep(hid,allowBattle){
     if(shadow){ caught={at:shadow,px:px,pz:pz,prog:prog}; break; }
     if(prog>=1)break;
    }
+   /* Total War rule: a host that sets out FRESH always makes at least the next tile this turn.
+      Without this a single leg can cost more movement than a fresh army owns, so it stalls on the
+      road, never arrives, and never gives battle — which read as "movement is broken" on turn one. */
+   if(!caught&&prog<1){ var _fresh=sq.every(function(q){return (q.mp||0)>=(UNITS[q.type].mp||2)-0.01;}); if(_fresh)prog=1; }
    if(prog>0.999)prog=1;    /* 5/6 + 1/6 is not 1 in floating point, and a column must be able to ARRIVE */
    if(caught){
     for(const q of sq){ q.legFrom=d.id; q.legTo=nxt; q.legT=Math.min(0.98,Math.max(0.02,caught.prog)); q.mp=0; }
