@@ -3954,18 +3954,21 @@ function acadStart(){
   nodes.push({id:i,name:names[i],x:ox+c*(mw/(cols-1))+rnd(-32,32),y:oy+rw*(mh/2)+rnd(-28,28),base:false,owner:null,r:15+Math.random()*7,links:[]}); }
  for(var i=0;i<N;i++){ var d=[]; for(var j=0;j<N;j++){ if(i!==j)d.push([Math.hypot(nodes[i].x-nodes[j].x,nodes[i].y-nodes[j].y),j]); } d.sort(function(a,b){return a[0]-b[0];}); var k=2+Math.floor(Math.random()*2); for(var m=0;m<k;m++){ var j=d[m][1]; if(nodes[i].links.indexOf(j)<0)nodes[i].links.push(j); if(nodes[j].links.indexOf(i)<0)nodes[j].links.push(i); } }
  [2,6,9,12].forEach(function(bi){nodes[bi].base=true;});
+ var PTYPES=['rock','verdant','ice','gas','rock','ice','verdant','gas','rock','gas','ice','verdant','rock','ice'];
+ for(var pi=0;pi<N;pi++)nodes[pi].ptype=nodes[pi].base?'forge':PTYPES[pi%PTYPES.length];
  var player={node:0,fleet:acadFleet(2.2),name:'Darrow'}; nodes[0].owner='player';
  var rn=['Karnus','Cassius','Antonia'],rc=['#ff6a5a','#e0a04a','#c86ad0'],rivals=[],spots=[13,9,7];
  var rkind=['brute','honour','schemer'],rpow=[2.6,2.0,1.7],rtag=['au Bellona, the brute — he hunts you and lives to break hulls','au Bellona, the honourable — he holds the field and fights fair','au Severus-Julii, the schemer — she steals ground and whispers in the courts'];
  for(var i=0;i<3;i++){ var sp=spots[i]; rivals.push({id:i,node:sp,fleet:acadFleet(rpow[i]+Math.random()*0.4),name:rn[i],dead:false,col:rc[i],kind:rkind[i],tag:rtag[i],pact:0}); nodes[sp].owner='rival'; }
  // The Iron Rain objective: the Sovereign's fortified moon, held by a garrison legion.
- var cN={id:N,name:'The Citadel',x:ox+mw/2,y:oy+mh/2+rnd(-10,10),base:false,owner:'sovereign',citadel:true,r:22,links:[]};
+ var cN={id:N,name:'The Citadel',x:ox+mw/2,y:oy+mh/2+rnd(-10,10),base:false,owner:'sovereign',citadel:true,ptype:'citadel',r:22,links:[]};
  (function(){ var d=[]; for(var j=0;j<N;j++)d.push([Math.hypot(cN.x-nodes[j].x,cN.y-nodes[j].y),j]); d.sort(function(a,b){return a[0]-b[0];}); for(var m=0;m<2;m++){ var j=d[m][1]; cN.links.push(j); if(nodes[j].links.indexOf(N)<0)nodes[j].links.push(N); } })();
  nodes.push(cN);
  var stars=[]; for(var i=0;i<220;i++)stars.push({x:Math.random()*1300,y:Math.random()*720,r:Math.random()*1.4+0.2,a:Math.random()*0.7+0.2});
- ACAD={on:true,turn:1,over:false,win:false,busy:false,nodes:nodes,player:player,rivals:rivals,stars:stars,hover:-1,raf:null,W:1300,H:720,s:1,ox:0,oy:0,
+ var neb=[]; for(var nb=0;nb<4;nb++)neb.push({x:Math.random()*1300,y:Math.random()*720,r:180+Math.random()*220,c:['#241a3a','#0e2a3a','#2a1a1e','#1a2a24'][nb%4],a:0.10+Math.random()*0.10});
+ ACAD={on:true,turn:1,over:false,win:false,busy:false,nodes:nodes,player:player,rivals:rivals,stars:stars,neb:neb,sel:-1,hover:-1,raf:null,W:1300,H:720,s:1,ox:0,oy:0,
   patron:pick(['House Augustus','House Bellona','House Telemanus','House Arcos','House Julii']),fav:55,kills:0,rigged:false,severed:false,endReason:'',
-  msg:'Jump to a linked asteroid. Take the supply bases (ringed gold), hunt the rival cadets, and rise. The Citadel (ringed red) is the Sovereign’s fortified moon: break its blockade in the void, then call down the Iron Rain and storm it on the ground.'};
+  msg:'You begin at your home world, marked YOU ARE HERE. Click any planet to inspect it and act. Take the gold supply bases, hunt the rival cadets (their colours), and rise. The Citadel (ringed red) is the Sovereign’s fortified moon: break its blockade in the void, then call the Iron Rain and storm it.'};
  if(INSTITUTE_RECORD){ var rec=INSTITUTE_RECORD; ACAD.fromInstitute=rec;
   ACAD.fav=clamp(55+Math.round(((rec.honour||50)-50)*0.4)+(rec.route==='olympus'?12:6),34,84);
   var bonus=(rec.route==='olympus'||(rec.honour||50)>=70)?2:1;
@@ -3997,8 +4000,35 @@ function acadBuildOverlay(){
 }
 function acadPt(e){ var cv=document.getElementById('acadCv'),r=cv.getBoundingClientRect(); return {x:(e.clientX-r.left-ACAD.ox)/ACAD.s,y:(e.clientY-r.top-ACAD.oy)/ACAD.s}; }
 function acadNodeAt(x,y){ for(var i=0;i<ACAD.nodes.length;i++){ var n=ACAD.nodes[i]; if(Math.hypot(n.x-x,n.y-y)<n.r+8)return i; } return -1; }
-function acadClick(e){ if(ACAD.busy||ACAD.over)return; var p=acadPt(e),nid=acadNodeAt(p.x,p.y); if(nid<0)return;
- if(ACAD.nodes[ACAD.player.node].links.indexOf(nid)>=0){ if(ACAD.nodes[nid].citadel) acadIronRain(); else acadMoveTo(nid); } }
+function acadClick(e){ if(ACAD.busy||ACAD.over)return; var p=acadPt(e),nid=acadNodeAt(p.x,p.y); if(nid<0){ ACAD.sel=-1; acadCloseInfo(); return; } ACAD.sel=nid; acadShowInfo(nid); }
+function acadCloseInfo(){ var p=document.getElementById('acadInfo'); if(p)p.remove(); }
+function acadShowInfo(nid){
+ var wrap=document.getElementById('acadWrap'); if(!wrap)return;
+ var n=ACAD.nodes[nid], isPlayer=(nid===ACAD.player.node), riv=acadRivalAt(nid);
+ var reachable=ACAD.nodes[ACAD.player.node].links.indexOf(nid)>=0;
+ var ptName={rock:'Rock world',ice:'Ice moon',gas:'Gas giant',verdant:'Verdant world',forge:'Forge-world',citadel:'Fortress moon'}[n.ptype]||'Asteroid';
+ var ownerName=isPlayer?'You':(n.citadel?'The Sovereign':(riv?riv.name+' au Bellona':(n.base?'Unclaimed base':'Unclaimed')));
+ var forceLine=isPlayer?('Your fleet · '+ACAD.player.fleet.length+' hulls'):(riv?(riv.name+"'s fleet · "+riv.fleet.length+' hulls'):(n.citadel?'A Sovereign blockade holds the void':(n.base?'A supply base — take it to draw reinforcements':'No fleet stationed')));
+ var bs='background:#0d1420;border:1px solid #26466a;color:#bfe0ff;font-family:JetBrains Mono,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:9px;border-radius:6px;cursor:pointer;width:100%;margin:0';
+ var acts='';
+ if(isPlayer){ acts+='<button id="acHold" style="'+bs+';color:#e8c96a;border-color:#8a6e2f">Hold / Resupply</button>'; }
+ else if(reachable){ if(n.citadel)acts+='<button id="acAct" style="'+bs+';color:#ffcf7a;border-color:#8a6e2f">Call the Iron Rain</button>'; else if(riv)acts+='<button id="acAct" style="'+bs+';color:#ff9a8a;border-color:#6b2e2e">Attack — Void Battle</button>'; else acts+='<button id="acAct" style="'+bs+';color:#8fe0b0;border-color:#2c6b4a">Jump here</button>'; }
+ else acts+='<div style="font-size:12px;color:#6c7488;padding:4px 0">Not linked to your position. Jump to an adjacent world first.</div>';
+ acts+='<button id="acClose" style="'+bs+';color:#8fa2bd;border-color:#1a2740">Close</button>';
+ var oc=acadOwnerCol(n)||'#8fa2bd';
+ acadCloseInfo();
+ var d=document.createElement('div');
+ d.innerHTML='<div id="acadInfo" style="position:absolute;top:58px;right:14px;width:252px;background:linear-gradient(180deg,rgba(12,19,32,.94),rgba(8,12,20,.94));border:1px solid '+oc+'66;border-left:3px solid '+oc+';border-radius:10px;padding:14px 15px;font-family:Barlow Condensed,sans-serif;color:#dfe7f2;z-index:8">'
+  +'<div style="font-family:Cinzel,serif;font-size:18px;color:#e8c96a;line-height:1.1">'+n.name+'</div>'
+  +'<div style="font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#8fa2bd;margin:3px 0 9px">'+ptName+(n.base?' · Supply base':'')+(n.citadel?' · Objective':'')+'</div>'
+  +'<div style="font-size:13px;color:#aebdd2">Held by <b style="color:'+oc+'">'+ownerName+'</b></div>'
+  +'<div style="font-size:13px;color:#9fb2cd;margin:6px 0 12px">'+forceLine+'</div>'
+  +'<div style="display:flex;flex-direction:column;gap:7px">'+acts+'</div></div>';
+ wrap.appendChild(d.firstChild);
+ var c=document.getElementById('acClose'); if(c)c.onclick=function(){ ACAD.sel=-1; acadCloseInfo(); };
+ var h=document.getElementById('acHold'); if(h)h.onclick=function(){ if(ACAD.busy||ACAD.over)return; acadCloseInfo(); ACAD.sel=-1; acadResupply(); acadRivalPhase(); };
+ var a=document.getElementById('acAct'); if(a)a.onclick=function(){ if(ACAD.busy||ACAD.over)return; acadCloseInfo(); ACAD.sel=-1; if(n.citadel)acadIronRain(); else acadMoveTo(nid); };
+}
 async function acadMoveTo(target){
  if(ACAD.busy)return; ACAD.busy=true;
  var riv=acadRivalAt(target);
@@ -4176,6 +4206,8 @@ function acadEnd(win){ ACAD.over=true; ACAD.win=win;
 }
 function acadTeardown(){ if(ACAD&&ACAD.raf)cancelAnimationFrame(ACAD.raf); var w=document.getElementById('acadWrap'); if(w)w.remove(); ACAD=null; }
 function acadLoop(){ if(!ACAD)return; ACAD.raf=requestAnimationFrame(acadLoop); try{acadDraw();}catch(e){soft(e);} }
+var ACAD_PT={rock:{a:'#9a8d78',b:'#332c24',atm:'rgba(210,190,150,0.5)'},ice:{a:'#bcd6ea',b:'#33465a',atm:'rgba(190,225,255,0.55)'},gas:{a:'#d09a5e',b:'#4a2c16',atm:'rgba(255,190,120,0.5)'},verdant:{a:'#6fa06a',b:'#1e3a24',atm:'rgba(150,220,150,0.5)'},forge:{a:'#b0705a',b:'#3a1c14',atm:'rgba(255,150,90,0.55)'},citadel:{a:'#8a8f9c',b:'#2a2c34',atm:'rgba(255,120,100,0.6)'}};
+function acadOwnerCol(n){ if(n.owner==='player')return '#5cc8ff'; if(n.owner==='sovereign'||n.citadel)return '#ff5a4a'; if(n.owner==='rival'){ var rv=acadRivalAt(n.id); return rv?rv.col:'#ff8a5a'; } if(n.base)return '#e8c96a'; return null; }
 function acadDraw(){
  var cv=document.getElementById('acadCv'); if(!cv||!ACAD)return;
  var dpr=window.devicePixelRatio||1,cw=cv.clientWidth,ch=cv.clientHeight;
@@ -4184,16 +4216,21 @@ function acadDraw(){
  var g=x.createLinearGradient(0,0,0,ch); g.addColorStop(0,'#080b16'); g.addColorStop(1,'#04050a'); x.fillStyle=g; x.fillRect(0,0,cw,ch);
  var s=Math.min(cw/ACAD.W,ch/ACAD.H),ox=(cw-ACAD.W*s)/2,oy=(ch-ACAD.H*s)/2; ACAD.s=s;ACAD.ox=ox;ACAD.oy=oy;
  x.save(); x.translate(ox,oy); x.scale(s,s);
+ if(ACAD.neb)for(var nb=0;nb<ACAD.neb.length;nb++){ var ne=ACAD.neb[nb]; var ng=x.createRadialGradient(ne.x,ne.y,1,ne.x,ne.y,ne.r); ng.addColorStop(0,ne.c); ng.addColorStop(1,'rgba(0,0,0,0)'); x.globalAlpha=ne.a; x.fillStyle=ng; x.beginPath(); x.arc(ne.x,ne.y,ne.r,0,7); x.fill(); } x.globalAlpha=1;
  for(var i=0;i<ACAD.stars.length;i++){ var st=ACAD.stars[i]; x.fillStyle='rgba(200,214,240,'+st.a+')'; x.fillRect(st.x,st.y,st.r,st.r); }
  var reach=ACAD.nodes[ACAD.player.node].links;
- for(var i=0;i<ACAD.nodes.length;i++){ var n=ACAD.nodes[i]; for(var l=0;l<n.links.length;l++){ var j=n.links[l]; if(j<i)continue; var m=ACAD.nodes[j]; var lit=(i===ACAD.player.node||j===ACAD.player.node); x.strokeStyle=lit?'rgba(120,190,255,0.4)':'rgba(90,110,150,0.16)'; x.lineWidth=lit?1.6:1; x.beginPath(); x.moveTo(n.x,n.y); x.lineTo(m.x,m.y); x.stroke(); } }
- for(var i=0;i<ACAD.nodes.length;i++){ var n=ACAD.nodes[i];
-  var rg=x.createRadialGradient(n.x-n.r*0.3,n.y-n.r*0.3,1,n.x,n.y,n.r); rg.addColorStop(0,'#6f6862'); rg.addColorStop(1,'#2b2a28'); x.fillStyle=rg; x.beginPath(); x.arc(n.x,n.y,n.r,0,7); x.fill();
-  if(n.base){ x.strokeStyle='#e8c96a'; x.lineWidth=2; x.beginPath(); x.arc(n.x,n.y,n.r+5,0,7); x.stroke(); }
-  if(n.citadel){ var pz=0.5+0.4*Math.sin(Date.now()/360); x.strokeStyle='rgba(255,90,74,'+pz+')'; x.lineWidth=2.4; x.beginPath(); x.arc(n.x,n.y,n.r+5,0,7); x.stroke(); x.strokeStyle='rgba(255,90,74,'+(pz*0.5)+')'; x.lineWidth=1.4; x.beginPath(); x.arc(n.x,n.y,n.r+11,0,7); x.stroke();
-   x.fillStyle='#ffcf7a'; x.strokeStyle='#5a1410'; x.lineWidth=1; var gy=n.y-2; x.fillRect(n.x-8,gy-4,16,9); x.strokeRect(n.x-8,gy-4,16,9); x.fillRect(n.x-8,gy-9,3,5); x.fillRect(n.x-1.5,gy-9,3,5); x.fillRect(n.x+5,gy-9,3,5); }
-  if(reach.indexOf(i)>=0&&!ACAD.busy){ x.strokeStyle=(n.citadel?'rgba(255,140,120,':'rgba(140,210,255,')+(0.45+0.3*Math.sin(Date.now()/300))+')'; x.lineWidth=2; x.beginPath(); x.arc(n.x,n.y,n.r+(n.citadel?15:9),0,7); x.stroke(); }
-  x.fillStyle='#9fb2cd'; x.font='11px JetBrains Mono,monospace'; x.textAlign='center'; x.fillText(n.name,n.x,n.y+n.r+16);
+ for(var i=0;i<ACAD.nodes.length;i++){ var n=ACAD.nodes[i]; for(var l=0;l<n.links.length;l++){ var j=n.links[l]; if(j<i)continue; var m=ACAD.nodes[j]; var lit=(i===ACAD.player.node||j===ACAD.player.node); x.strokeStyle=lit?'rgba(120,190,255,0.42)':'rgba(90,110,150,0.14)'; x.lineWidth=lit?1.8:1; x.beginPath(); x.moveTo(n.x,n.y); x.lineTo(m.x,m.y); x.stroke(); } }
+ for(var i=0;i<ACAD.nodes.length;i++){ var n=ACAD.nodes[i]; var pt=ACAD_PT[n.ptype]||ACAD_PT.rock; var oc=acadOwnerCol(n);
+  var ag=x.createRadialGradient(n.x,n.y,n.r*0.6,n.x,n.y,n.r+7); ag.addColorStop(0,pt.atm); ag.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=ag; x.beginPath(); x.arc(n.x,n.y,n.r+7,0,7); x.fill();
+  var rg=x.createRadialGradient(n.x-n.r*0.35,n.y-n.r*0.4,1,n.x,n.y,n.r); rg.addColorStop(0,pt.a); rg.addColorStop(1,pt.b); x.fillStyle=rg; x.beginPath(); x.arc(n.x,n.y,n.r,0,7); x.fill();
+  x.save(); x.beginPath(); x.arc(n.x,n.y,n.r,0,7); x.clip(); x.strokeStyle='rgba(0,0,0,0.18)'; x.lineWidth=1.5; for(var bnd=-2;bnd<=2;bnd++){ x.beginPath(); x.moveTo(n.x-n.r,n.y+bnd*n.r*0.35+3); x.bezierCurveTo(n.x-n.r*0.3,n.y+bnd*n.r*0.35-2,n.x+n.r*0.3,n.y+bnd*n.r*0.35+6,n.x+n.r,n.y+bnd*n.r*0.35+2); x.stroke(); } x.restore();
+  var pz=0.4+0.35*Math.sin(Date.now()/((n.citadel||n.owner==='player')?360:800)+i);
+  if(oc){ x.strokeStyle=oc; x.globalAlpha=(n.owner==='player'||n.citadel)?(0.55+pz*0.6):0.9; x.lineWidth=(n.citadel?2.6:2); x.beginPath(); x.arc(n.x,n.y,n.r+5,0,7); x.stroke(); if(n.citadel){ x.globalAlpha=pz*0.5; x.lineWidth=1.4; x.beginPath(); x.arc(n.x,n.y,n.r+11,0,7); x.stroke(); } x.globalAlpha=1; }
+  if(n.citadel){ x.fillStyle='#ffcf7a'; x.strokeStyle='#5a1410'; x.lineWidth=1; var gy=n.y-2; x.fillRect(n.x-8,gy-4,16,9); x.strokeRect(n.x-8,gy-4,16,9); x.fillRect(n.x-8,gy-9,3,5); x.fillRect(n.x-1.5,gy-9,3,5); x.fillRect(n.x+5,gy-9,3,5); }
+  if(i===ACAD.player.node){ x.strokeStyle='rgba(140,220,255,'+(0.55+pz*0.5)+')'; x.lineWidth=1.6; x.beginPath(); x.arc(n.x,n.y,n.r+14,0,7); x.stroke(); x.fillStyle='#bfe6ff'; x.font='700 9px JetBrains Mono,monospace'; x.textAlign='center'; x.fillText('YOU ARE HERE',n.x,n.y-n.r-20); }
+  if(i===ACAD.sel){ x.strokeStyle='#e8c96a'; x.lineWidth=1.6; x.setLineDash([4,3]); x.beginPath(); x.arc(n.x,n.y,n.r+18,0,7); x.stroke(); x.setLineDash([]); }
+  if(reach.indexOf(i)>=0&&!ACAD.busy&&i!==ACAD.player.node){ x.strokeStyle=(n.citadel?'rgba(255,140,120,':'rgba(140,210,255,')+(0.4+0.28*Math.sin(Date.now()/300))+')'; x.lineWidth=1.8; x.beginPath(); x.arc(n.x,n.y,n.r+(n.citadel?15:9),0,7); x.stroke(); }
+  x.fillStyle='#aebdd2'; x.font='11px JetBrains Mono,monospace'; x.textAlign='center'; x.fillText(n.name,n.x,n.y+n.r+16);
  }
  var drawFleet=function(nid,col,count){ var n=ACAD.nodes[nid],fx=n.x,fy=n.y-n.r-14; x.fillStyle=col; x.strokeStyle='#0009'; x.lineWidth=1; x.beginPath(); x.moveTo(fx,fy-9); x.lineTo(fx-7,fy+5); x.lineTo(fx+7,fy+5); x.closePath(); x.fill(); x.stroke(); x.fillStyle='#fff'; x.font='700 10px JetBrains Mono,monospace'; x.textAlign='center'; x.fillText(count,fx,fy+1.5); };
  for(var i=0;i<ACAD.rivals.length;i++){ var rv=ACAD.rivals[i]; if(rv.dead)continue; drawFleet(rv.node,rv.col,rv.fleet.length); }
