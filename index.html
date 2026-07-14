@@ -4091,18 +4091,23 @@ async function acadGroundAssault(){
   if(!G.houses[defHid])G.houses[defHid]={tech:{},nextMorale:0};
  }
  var rk=acadRank(), sc=1+0.14*rk;
- var att=[ newSquad('vanguard',Math.round(150*sc),attHid), newSquad('howler',Math.round(130*sc),attHid),
-           newSquad('champion',Math.round(70*sc),attHid), newSquad('blade',Math.round(170*sc),attHid),
-           newSquad('bow',Math.round(120*sc),attHid) ];
- var def=[ newSquad('pike',320,defHid), newSquad('blade',230,defHid), newSquad('bow',190,defHid),
-           newSquad('champion',80,defHid), newSquad('onager',2,defHid) ];
+ // The Iron Rain falls in waves: StarShell drop-troops storm the walls, then the keep.
+ var waves=[
+  { tname:'The Iron Rain · Storm the Walls', walls:3,
+    att:[ newSquad('vanguard',Math.round(165*sc),attHid), newSquad('howler',Math.round(145*sc),attHid), newSquad('champion',Math.round(85*sc),attHid), newSquad('blade',Math.round(150*sc),attHid), newSquad('bow',Math.round(110*sc),attHid) ],
+    def:[ newSquad('pike',340,defHid), newSquad('blade',240,defHid), newSquad('bow',200,defHid), newSquad('champion',85,defHid), newSquad('onager',3,defHid) ] },
+  { tname:'The Iron Rain · Storm the Keep', walls:0,
+    att:[ newSquad('champion',Math.round(120*sc),attHid), newSquad('vanguard',Math.round(150*sc),attHid), newSquad('howler',Math.round(125*sc),attHid), newSquad('blade',Math.round(130*sc),attHid) ],
+    def:[ newSquad('champion',190,defHid), newSquad('pike',220,defHid), newSquad('blade',200,defHid), newSquad('vanguard',130,defHid) ] }
+ ];
  var wrap=document.getElementById('acadWrap'); if(wrap)wrap.style.display='none';
  var res=null;
- try{ res=await runBattle({attHid:attHid,defHid:defHid,attSquads:att,defSquads:def,terrain:'olympus',tname:'The Citadel',castle:true,walls:2,playerSide:'A'}); }
- catch(e){ soft(e); }
- // runBattle's own teardown reveals #screen-campaign; re-hide it and restore the Academy.
- try{ document.getElementById('screen-campaign').classList.add('hidden'); }catch(e){}
- try{ document.getElementById('screen-battle').classList.add('hidden'); }catch(e){}
+ for(var w=0;w<waves.length;w++){ var wv=waves[w];
+  try{ res=await runBattle({attHid:attHid,defHid:defHid,attSquads:wv.att,defSquads:wv.def,terrain:'olympus',tname:wv.tname,castle:true,walls:wv.walls,playerSide:'A'}); }
+  catch(e){ soft(e); }
+  try{ document.getElementById('screen-campaign').classList.add('hidden'); document.getElementById('screen-battle').classList.add('hidden'); }catch(e){}
+  if(!res||res.winnerSide!=='A')break;   /* a broken wave ends the Rain */
+ }
  if(stub)G=savedG;
  if(wrap)wrap.style.display='flex';
  return res;
@@ -4118,7 +4123,7 @@ async function acadIronRain(){
  ACAD.player.fleet=vres.fleetA;
  if(!vres.win){ acadFav(-12); ACAD.msg='The Sovereign’s wall of steel holds. Your Iron Rain is thrown back into the dark. Rebuild your fleet and strike again.'; if(acadCheckEnd()){ACAD.busy=false;return;} await acadRivalPhase(); ACAD.busy=false; return; }
  // Stage 2 — call down the Iron Rain: a real ground assault on the Citadel walls.
- ACAD.msg='The void is yours. Drop pods burn down through the atmosphere: you call the Iron Rain onto the Citadel.';
+ ACAD.msg='The void is yours. StarShells burn down through the atmosphere in wave upon wave — the Iron Rain falls on the Citadel. Storm the walls, then the keep.';
  var gres=await acadGroundAssault();
  if(gres&&gres.winnerSide==='A'){ ACAD.nodes[ACAD.nodes.length-1].owner='player'; ACAD.endReason='ironrain'; acadEnd(true); ACAD.busy=false; return; }
  acadFav(-15); ACAD.msg='The garrison holds the Citadel walls. Your legion breaks on the stone and falls back to the ships. The Iron Rain will have to fall again.';
