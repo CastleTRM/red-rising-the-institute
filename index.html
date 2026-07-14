@@ -6558,7 +6558,7 @@ function m3Routes(){
 const MARCH_FX={};                 /* toTile -> fromTile, so a new column walks in from the right side */
 const ARMY_SCALE=2.0;              /* a land is ~200 units across. An army must read at that scale. */
 const ARMY_LOD_RAD=1300;           /* closer than this (or selected), the single token unpacks into the column */
-var M3_CHAR_SCALE=3.4, M3_CHAR_YAW=0, M3_CHAR_CAP=20;   /* one animated 3D general per army on the campaign map, Total War style */
+var M3_CHAR_SCALE=10, M3_CHAR_YAW=0, M3_CHAR_CAP=20;   /* one animated 3D general per army on the campaign map, Total War style */
 /* ============ THE SIGNUM ============
    Not a flag on a stick. A Roman signum militaria: a shaft crowned with a spearhead
    and a wreath, hung with phalerae, and carrying a VEXILLUM, a square of cloth that
@@ -6759,8 +6759,14 @@ function m3ArmyWalk(){
   const a=M3.army[id];
   const ud=a.grp&&a.grp.userData;
   if(ud&&ud.detail&&ud.lead){
-   const close=(typeof G!=='undefined'&&G&&G.sel===id)||((M3.rad||M3_RDEF)<ARMY_LOD_RAD);
-   ud.detail.visible=close; ud.lead.visible=!close;
+   if(a._lead3d){
+    /* Total War: once the animated 3D general has loaded, HE is the army on the map at every
+       zoom. The low-poly column and lead token step aside so one character carries the host. */
+    ud.lead.visible=true; ud.detail.visible=false;
+   }else{
+    const close=(typeof G!=='undefined'&&G&&G.sel===id)||((M3.rad||M3_RDEF)<ARMY_LOD_RAD);
+    ud.detail.visible=close; ud.lead.visible=!close;
+   }
   }
   const dx=a.tgt.x-a.cur.x, dz=a.tgt.z-a.cur.z;
   const dist=Math.hypot(dx,dz);
