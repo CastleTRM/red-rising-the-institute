@@ -3953,7 +3953,7 @@ function acadStart(){
  for(var i=0;i<N;i++){ var c=i%cols,rw=Math.floor(i/cols);
   nodes.push({id:i,name:names[i],x:ox+c*(mw/(cols-1))+rnd(-32,32),y:oy+rw*(mh/2)+rnd(-28,28),base:false,owner:null,r:15+Math.random()*7,links:[]}); }
  for(var i=0;i<N;i++){ var d=[]; for(var j=0;j<N;j++){ if(i!==j)d.push([Math.hypot(nodes[i].x-nodes[j].x,nodes[i].y-nodes[j].y),j]); } d.sort(function(a,b){return a[0]-b[0];}); var k=2+Math.floor(Math.random()*2); for(var m=0;m<k;m++){ var j=d[m][1]; if(nodes[i].links.indexOf(j)<0)nodes[i].links.push(j); if(nodes[j].links.indexOf(i)<0)nodes[j].links.push(i); } }
- [2,6,9,12].forEach(function(bi){nodes[bi].base=true;});
+ [0,2,6,9,12].forEach(function(bi){nodes[bi].base=true;nodes[bi].tier=1;});   /* your home world is your first shipyard */
  var PTYPES=['rock','verdant','ice','gas','rock','ice','verdant','gas','rock','gas','ice','verdant','rock','ice'];
  for(var pi=0;pi<N;pi++)nodes[pi].ptype=nodes[pi].base?'forge':PTYPES[pi%PTYPES.length];
  var player={node:0,fleet:acadFleet(2.2),name:'Darrow'}; nodes[0].owner='player';
@@ -3967,7 +3967,7 @@ function acadStart(){
  var stars=[]; for(var i=0;i<220;i++)stars.push({x:Math.random()*1300,y:Math.random()*720,r:Math.random()*1.4+0.2,a:Math.random()*0.7+0.2});
  var neb=[]; for(var nb=0;nb<4;nb++)neb.push({x:Math.random()*1300,y:Math.random()*720,r:180+Math.random()*220,c:['#241a3a','#0e2a3a','#2a1a1e','#1a2a24'][nb%4],a:0.10+Math.random()*0.10});
  ACAD={on:true,turn:1,over:false,win:false,busy:false,nodes:nodes,player:player,rivals:rivals,stars:stars,neb:neb,sel:-1,hover:-1,raf:null,W:1300,H:720,s:1,ox:0,oy:0,
-  patron:pick(['House Augustus','House Bellona','House Telemanus','House Arcos','House Julii']),fav:55,kills:0,rigged:false,severed:false,endReason:'',
+  patron:pick(['House Augustus','House Bellona','House Telemanus','House Arcos','House Julii']),fav:55,kills:0,req:34,rigged:false,severed:false,endReason:'',
   msg:'You begin at your home world, marked YOU ARE HERE. Click any planet to inspect it and act. Take the gold supply bases, hunt the rival cadets (their colours), and rise. The Citadel (ringed red) is the Sovereign’s fortified moon: break its blockade in the void, then call the Iron Rain and storm it.'};
  if(INSTITUTE_RECORD){ var rec=INSTITUTE_RECORD; ACAD.fromInstitute=rec;
   ACAD.fav=clamp(55+Math.round(((rec.honour||50)-50)*0.4)+(rec.route==='olympus'?12:6),34,84);
@@ -3978,6 +3978,13 @@ function acadStart(){
  acadBuildOverlay(); acadLoop();
 }
 function acadResupply(){ if(ACAD.severed)return; var n=ACAD.nodes[ACAD.player.node]; if(n.base&&ACAD.player.fleet.length<11){ ACAD.player.fleet.push({type:pick(['ripwing','leech','destroyer','torch'])}); acadFav(3); var extra=''; if(ACAD.fav>=78&&ACAD.player.fleet.length<11){ ACAD.player.fleet.push({type:pick(['destroyer','ripwing'])}); extra=' Your patron sends a second hull in favour.'; } ACAD.msg='Supply base at '+n.name+': a ship joins your fleet.'+extra; } }
+/* ===== Economy: held shipyards yield requisition; spend it to build and upgrade. ===== */
+var ACAD_SHIP={torch:{cost:14,name:'TorchShip'},ripwing:{cost:12,name:'RipWing'},leech:{cost:16,name:'LeechCraft'},destroyer:{cost:22,name:'Destroyer'}};
+function acadMyBases(){ return ACAD.nodes.filter(function(n){return n.base&&n.owner==='player';}); }
+function acadBaseIncome(){ var b=acadMyBases(); var sum=3; for(var i=0;i<b.length;i++)sum+=4+(b[i].tier||1)*3; return sum; }
+function acadIncome(){ if(ACAD.severed)return 0; var g=acadBaseIncome(); ACAD.req=(ACAD.req||0)+g; return g; }
+function acadBuild(type){ var n=ACAD.nodes[ACAD.sel]; if(!n||!n.base||n.owner!=='player')return; var sd=ACAD_SHIP[type]; if(!sd)return; if((ACAD.req||0)<sd.cost){ ACAD.msg='Not enough requisition for a '+sd.name+'. You need '+sd.cost+'.'; return; } if(ACAD.player.fleet.length>=12){ ACAD.msg='Your fleet is at full strength (12 hulls). Field it before you build more.'; return; } ACAD.req-=sd.cost; ACAD.player.fleet.splice(Math.max(0,ACAD.player.fleet.length-1),0,{type:type}); ACAD.msg='The yards at '+n.name+' lay down a '+sd.name+'. It joins your fleet.'; acadShowInfo(ACAD.sel); }
+function acadUpgradeBase(){ var n=ACAD.nodes[ACAD.sel]; if(!n||!n.base||n.owner!=='player')return; var tier=n.tier||1; if(tier>=3){ ACAD.msg=n.name+' is a first-rate shipyard already.'; return; } var cost=18*tier; if((ACAD.req||0)<cost){ ACAD.msg='Upgrading '+n.name+' costs '+cost+' requisition.'; return; } ACAD.req-=cost; n.tier=tier+1; ACAD.msg=n.name+' is raised to a tier '+n.tier+' shipyard. Its yield and yards improve.'; acadShowInfo(ACAD.sel); }
 function acadBuildOverlay(){
  var old=document.getElementById('acadWrap'); if(old)old.remove();
  var w=document.createElement('div'); w.id='acadWrap';
@@ -4014,6 +4021,10 @@ function acadShowInfo(nid){
  if(isPlayer){ acts+='<button id="acHold" style="'+bs+';color:#e8c96a;border-color:#8a6e2f">Hold / Resupply</button>'; }
  else if(reachable){ if(n.citadel)acts+='<button id="acAct" style="'+bs+';color:#ffcf7a;border-color:#8a6e2f">Call the Iron Rain</button>'; else if(riv)acts+='<button id="acAct" style="'+bs+';color:#ff9a8a;border-color:#6b2e2e">Attack — Void Battle</button>'; else acts+='<button id="acAct" style="'+bs+';color:#8fe0b0;border-color:#2c6b4a">Jump here</button>'; }
  else acts+='<div style="font-size:12px;color:#6c7488;padding:4px 0">Not linked to your position. Jump to an adjacent world first.</div>';
+ if(n.base&&n.owner==='player'){ var tier=n.tier||1;
+  acts+='<div style="font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#8fa2bd;margin:6px 0 2px">Shipyard · tier '+tier+' · +'+(4+tier*3)+' req/turn</div>';
+  for(var st in ACAD_SHIP){ var sc=ACAD_SHIP[st]; var can=(ACAD.req||0)>=sc.cost&&ACAD.player.fleet.length<12; acts+='<button data-build="'+st+'" style="'+bs+';font-size:10px;padding:8px'+(can?'':';opacity:.4')+'">Build '+sc.name+' — '+sc.cost+'</button>'; }
+  var upCost=18*tier; if(tier<3)acts+='<button id="acUpg" style="'+bs+';color:#e8c96a;border-color:#8a6e2f;font-size:10px;padding:8px'+((ACAD.req||0)>=upCost?'':';opacity:.4')+'">Upgrade shipyard — '+upCost+'</button>'; }
  acts+='<button id="acClose" style="'+bs+';color:#8fa2bd;border-color:#1a2740">Close</button>';
  var oc=acadOwnerCol(n)||'#8fa2bd';
  acadCloseInfo();
@@ -4028,6 +4039,8 @@ function acadShowInfo(nid){
  var c=document.getElementById('acClose'); if(c)c.onclick=function(){ ACAD.sel=-1; acadCloseInfo(); };
  var h=document.getElementById('acHold'); if(h)h.onclick=function(){ if(ACAD.busy||ACAD.over)return; acadCloseInfo(); ACAD.sel=-1; acadResupply(); acadRivalPhase(); };
  var a=document.getElementById('acAct'); if(a)a.onclick=function(){ if(ACAD.busy||ACAD.over)return; acadCloseInfo(); ACAD.sel=-1; if(n.citadel)acadIronRain(); else acadMoveTo(nid); };
+ var bb=document.getElementById('acadInfo'); if(bb){ var blds=bb.querySelectorAll('[data-build]'); for(var bi=0;bi<blds.length;bi++)(function(el){ el.onclick=function(){ if(ACAD.busy||ACAD.over)return; acadBuild(el.getAttribute('data-build')); }; })(blds[bi]); }
+ var up=document.getElementById('acUpg'); if(up)up.onclick=function(){ if(ACAD.busy||ACAD.over)return; acadUpgradeBase(); };
 }
 async function acadMoveTo(target){
  if(ACAD.busy)return; ACAD.busy=true;
@@ -4130,6 +4143,7 @@ async function acadRivalPhase(){
   } else { if(ACAD.nodes[rv.node].owner==='rival')ACAD.nodes[rv.node].owner=null; rv.node=best; if(!ACAD.nodes[best].owner)ACAD.nodes[best].owner='rival'; if(ACAD.nodes[best].base&&rv.fleet.length<10)rv.fleet.push({type:pick(['ripwing','leech','destroyer'])}); if(rv.kind==='brute'&&rv.fleet.length<11&&Math.random()<0.6)rv.fleet.push({type:pick(['destroyer','ripwing'])}); }
  }
  ACAD.turn++;
+ var inc=acadIncome(); if(inc&&acadMyBases().length)ACAD.msg=(ACAD.msg?ACAD.msg+' ':'')+'Your '+acadMyBases().length+' shipyard'+(acadMyBases().length>1?'s':'')+' yield '+inc+' requisition.';
  if(acadCheckEnd()){ ACAD.busy=false; return; }
  await acadMaybeEvent();
  ACAD.busy=false;
@@ -4241,7 +4255,7 @@ function acadDraw(){
  var bw2=170,bx2=14,by2=16; x.fillStyle='rgba(0,0,0,0.45)'; x.fillRect(bx2-2,by2-2,bw2+4,9);
  var fc=ACAD.fav<25?'#c1503a':(ACAD.fav<60?'#c9a54a':'#6ea86a'); x.fillStyle=fc; x.fillRect(bx2,by2,bw2*ACAD.fav/100,5);
  x.fillStyle='#7f8ba0'; x.font='9px JetBrains Mono,monospace'; x.textAlign='left'; x.fillText('FAVOUR OF '+ACAD.patron.toUpperCase()+(ACAD.severed?' · SEVERED':''),bx2,by2+16);
- var te=document.getElementById('acadTurn'); if(te)te.textContent='Turn '+ACAD.turn+'  ·  '+ACAD_RANKS[acadRank()]+'  ·  Fleet '+ACAD.player.fleet.length+'  ·  Rivals '+alive;
+ var te=document.getElementById('acadTurn'); if(te)te.textContent='Turn '+ACAD.turn+'  ·  '+ACAD_RANKS[acadRank()]+'  ·  Fleet '+ACAD.player.fleet.length+'  ·  Req '+Math.round(ACAD.req||0)+'  ·  Rivals '+alive;
  var me=document.getElementById('acadMsg'); if(me)me.textContent=ACAD.msg;
 }
 function campEnd(ending){
