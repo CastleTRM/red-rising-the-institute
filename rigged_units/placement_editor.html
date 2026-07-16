@@ -82,10 +82,11 @@ function syncLabels(){
   el("pxv").textContent=(+el("px").value).toFixed(3);el("pyv").textContent=(+el("py").value).toFixed(3);el("pzv").textContent=(+el("pz").value).toFixed(3);
   el("scv").textContent=(+el("sc").value).toFixed(2);
 }
+var SOCK=100; // socket_weapon_r sits under a 0.01-scaled armature; offsets are in socket-local units
 function applyAdjust(){
   if(!adjust)return;var p=readUI();
   adjust.rotation.set(p.rot[0]*Math.PI/180,p.rot[1]*Math.PI/180,p.rot[2]*Math.PI/180);
-  adjust.position.set(p.pos[0],p.pos[1],p.pos[2]);
+  adjust.position.set(p.pos[0]*SOCK,p.pos[1]*SOCK,p.pos[2]*SOCK); // metres -> socket units so 1m of slider = 1m in world
   adjust.scale.set(p.scale,p.scale,p.scale);
 }
 
