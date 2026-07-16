@@ -1,0 +1,154 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Weapon Placement Editor — The Institute</title>
+<style>
+html,body{margin:0;height:100%;background:#0f1218;color:#e7e9ef;font-family:Arial,Helvetica,sans-serif;overflow:hidden}
+#c{display:block;width:100vw;height:100vh}
+#p{position:fixed;top:10px;left:10px;width:300px;background:rgba(12,15,22,.94);border:1px solid #2a3242;border-radius:12px;padding:12px 14px;max-height:94vh;overflow:auto}
+h1{font:600 15px Georgia,serif;margin:0 0 8px}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0}
+.row label{font-size:11px;color:#93a; width:16px}
+select,button{background:#1b2230;color:#e7e9ef;border:1px solid #34405a;border-radius:7px;padding:6px 8px;font-size:12px;cursor:pointer}
+select{flex:1}
+.sec{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6f7889;margin:12px 0 4px;border-top:1px solid #222b3a;padding-top:8px}
+input[type=range]{flex:1}
+.val{width:52px;text-align:right;font-size:11px;color:#9fd0ff;font-variant-numeric:tabular-nums}
+.sl label{width:14px;color:#c9d2e2;font-size:12px}
+button.small{padding:4px 7px;margin:2px 2px 0 0;font-size:11px}
+button.on{background:#3f6fa8;border-color:#5b86bd}
+.hb{width:22px;height:18px;border-radius:4px;padding:0;border:1px solid #2a3242}
+#status{position:fixed;bottom:8px;left:12px;font-size:11px;color:#7f8896}
+textarea{width:100%;height:90px;background:#0a0d13;color:#9fd0ff;border:1px solid #34405a;border-radius:7px;font:11px monospace;margin-top:4px}
+.mini{font-size:10px;color:#6f7889;margin-top:2px;line-height:1.4}
+</style></head>
+<body><canvas id="c"></canvas>
+<div id="p">
+  <h1>Weapon Placement Editor</h1>
+  <div class="row"><label>Body</label><select id="body"></select></div>
+  <div class="row"><label>Item</label><select id="weap"></select></div>
+  <div class="row"><label>Sock</label><select id="sock"></select></div>
+
+  <div class="sec">Rotation (deg)</div>
+  <div class="row sl"><label>X</label><input type="range" id="rx" min="-180" max="180" step="1" value="0"><span class="val" id="rxv">0</span></div>
+  <div class="row sl"><label>Y</label><input type="range" id="ry" min="-180" max="180" step="1" value="0"><span class="val" id="ryv">0</span></div>
+  <div class="row sl"><label>Z</label><input type="range" id="rz" min="-180" max="180" step="1" value="0"><span class="val" id="rzv">0</span></div>
+
+  <div class="sec">Offset (m)</div>
+  <div class="row sl"><label>X</label><input type="range" id="px" min="-0.4" max="0.4" step="0.005" value="0"><span class="val" id="pxv">0</span></div>
+  <div class="row sl"><label>Y</label><input type="range" id="py" min="-0.4" max="0.4" step="0.005" value="0"><span class="val" id="pyv">0</span></div>
+  <div class="row sl"><label>Z</label><input type="range" id="pz" min="-0.4" max="0.4" step="0.005" value="0"><span class="val" id="pzv">0</span></div>
+
+  <div class="sec">Scale</div>
+  <div class="row sl"><label>S</label><input type="range" id="sc" min="0.3" max="2.5" step="0.01" value="1"><span class="val" id="scv">1.00</span></div>
+
+  <div class="sec">Animation</div>
+  <div id="anim"></div>
+  <div class="sec">House tint</div>
+  <div id="houses"></div>
+
+  <div class="sec">Save / Export</div>
+  <button class="small" id="save">Save this combo</button>
+  <button class="small" id="reset">Reset</button>
+  <button class="small" id="export">Export all →</button>
+  <div class="mini">Adjust, then <b>Save this combo</b>. Do each body+item you use, then <b>Export all</b> and send me the JSON.</div>
+  <textarea id="out" placeholder="Exported placements appear here"></textarea>
+</div>
+<div id="status">loading…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+var BODIES=["infantry_male","giant","hero_gold","warhorse"];
+var ITEMS=["gladius","slingblade","razor","spear","bow","warhammer","dual_blades","scutum","round_shield","tower_shield"];
+var SOCKETS=["socket_weapon_r","socket_shield_l","socket_head","socket_back"];
+var HOUSES={mars:"#b23b2e",minerva:"#3f6fa8",apollo:"#c8821b",pluto:"#75639b",ceres:"#a98a4f",diana:"#47795a",jupiter:"#7d8896",juno:"#8a5a6e",venus:"#b8788a",vulcan:"#8a4a2e",bacchus:"#6e3a4e",mercury:"#4a8f86"};
+var LS_KEY="institute_placements_v1";
+var store=JSON.parse(localStorage.getItem(LS_KEY)||"{}");
+var S=document.getElementById("status");
+var renderer,scene,cam,ctrl,clock,mixer,actions={},cur,bodyRoot,adjust,weapRoot,cloth=[],sockNode;
+var loader=new THREE.GLTFLoader();
+
+function el(id){return document.getElementById(id);}
+function key(){return el("body").value+"|"+el("weap").value+"|"+el("sock").value;}
+function fillSel(sel,arr,extra){arr.forEach(function(v){var o=document.createElement("option");o.value=v;o.textContent=v;sel.appendChild(o);});if(extra){var o=document.createElement("option");o.value="";o.textContent=extra;sel.insertBefore(o,sel.firstChild);sel.value="";}}
+
+function readUI(){return{rot:[+el("rx").value,+el("ry").value,+el("rz").value],pos:[+el("px").value,+el("py").value,+el("pz").value],scale:+el("sc").value};}
+function writeUI(p){
+  el("rx").value=p.rot[0];el("ry").value=p.rot[1];el("rz").value=p.rot[2];
+  el("px").value=p.pos[0];el("py").value=p.pos[1];el("pz").value=p.pos[2];el("sc").value=p.scale;
+  syncLabels();
+}
+function syncLabels(){
+  el("rxv").textContent=el("rx").value;el("ryv").textContent=el("ry").value;el("rzv").textContent=el("rz").value;
+  el("pxv").textContent=(+el("px").value).toFixed(3);el("pyv").textContent=(+el("py").value).toFixed(3);el("pzv").textContent=(+el("pz").value).toFixed(3);
+  el("scv").textContent=(+el("sc").value).toFixed(2);
+}
+function applyAdjust(){
+  if(!adjust)return;var p=readUI();
+  adjust.rotation.set(p.rot[0]*Math.PI/180,p.rot[1]*Math.PI/180,p.rot[2]*Math.PI/180);
+  adjust.position.set(p.pos[0],p.pos[1],p.pos[2]);
+  adjust.scale.set(p.scale,p.scale,p.scale);
+}
+
+function init(){
+  var c=el("c");
+  renderer=new THREE.WebGLRenderer({canvas:c,antialias:true});renderer.setPixelRatio(Math.min(2,devicePixelRatio||1));renderer.setSize(innerWidth,innerHeight);
+  if('outputEncoding' in renderer)renderer.outputEncoding=THREE.sRGBEncoding;
+  scene=new THREE.Scene();scene.background=new THREE.Color(0x0f1218);
+  cam=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.01,100);cam.position.set(1.6,1.4,2.0);
+  ctrl=new THREE.OrbitControls(cam,renderer.domElement);ctrl.target.set(0,1.0,0);ctrl.update();
+  scene.add(new THREE.HemisphereLight(0xcfe0ff,0x202028,1.1));
+  var k=new THREE.DirectionalLight(0xffffff,1.6);k.position.set(4,7,5);scene.add(k);
+  var g=new THREE.Mesh(new THREE.CircleGeometry(3,48),new THREE.MeshStandardMaterial({color:0x161b24,roughness:1}));g.rotation.x=-Math.PI/2;scene.add(g);
+  clock=new THREE.Clock();
+  fillSel(el("body"),BODIES);fillSel(el("weap"),ITEMS,"— none —");fillSel(el("sock"),SOCKETS);
+  el("weap").value="gladius";
+  ["rx","ry","rz","px","py","pz","sc"].forEach(function(id){el(id).addEventListener("input",function(){syncLabels();applyAdjust();});});
+  el("body").onchange=el("sock").onchange=loadBody;
+  el("weap").onchange=function(){loadItem(true);};
+  el("save").onclick=function(){store[key()]=readUI();localStorage.setItem(LS_KEY,JSON.stringify(store));S.textContent="saved "+key();};
+  el("reset").onclick=function(){writeUI({rot:[0,0,0],pos:[0,0,0],scale:1});applyAdjust();};
+  el("export").onclick=function(){el("out").value=JSON.stringify(store,null,1);el("out").select();};
+  Object.keys(HOUSES).forEach(function(h){var b=document.createElement("button");b.className="small hb";b.style.background=HOUSES[h];b.title=h;b.onclick=function(){cloth.forEach(function(m){m.color=new THREE.Color(HOUSES[h]);m.needsUpdate=true;});};el("houses").appendChild(b);});
+  loadBody();
+  addEventListener("resize",function(){cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+  (function loop(){requestAnimationFrame(loop);var dt=clock.getDelta();if(mixer)mixer.update(dt);renderer.render(scene,cam);})();
+}
+function clearBody(){if(bodyRoot){scene.remove(bodyRoot);bodyRoot=null;}mixer=null;actions={};cur=null;cloth=[];el("anim").innerHTML="";}
+function loadBody(){
+  clearBody();S.textContent="loading body…";
+  loader.load("../assets/models/"+el("body").value+".glb",function(gl){
+    bodyRoot=gl.scene;scene.add(bodyRoot);mixer=new THREE.AnimationMixer(bodyRoot);
+    sockNode=null;
+    bodyRoot.traverse(function(o){
+      if(o.name===el("sock").value)sockNode=o;
+      if(o.isMesh&&o.material&&o.material.name==="house_cloth"){o.material=o.material.clone();cloth.push(o.material);}
+    });
+    (gl.animations||[]).forEach(function(cl){
+      actions[cl.name]=mixer.clipAction(cl);
+      var sh=cl.name.replace(/^unit_[a-z0-9_]+?_/,'').replace(/_v\d+$/,'');
+      var b=document.createElement("button");b.className="small";b.textContent=sh;b.onclick=function(){play(cl.name,b);};el("anim").appendChild(b);
+      if(sh.indexOf("idle")>=0)setTimeout(function(){play(cl.name,b);},0);
+    });
+    loadItem(false);
+  },undefined,function(e){S.textContent="body load error — serve folder over http (python3 -m http.server)";});
+}
+function loadItem(keepStatus){
+  if(adjust&&adjust.parent)adjust.parent.remove(adjust);adjust=null;weapRoot=null;
+  if(!el("weap").value){S.textContent="no item";return;}
+  if(!sockNode){S.textContent="⚠ "+el("sock").value+" not found on "+el("body").value;return;}
+  loader.load("../assets/attachments/"+el("weap").value+".glb",function(w){
+    adjust=new THREE.Group();adjust.name="adjust";weapRoot=w.scene;adjust.add(weapRoot);sockNode.add(adjust);
+    var saved=store[key()]||{rot:[0,0,0],pos:[0,0,0],scale:1};writeUI(saved);applyAdjust();
+    S.textContent="✓ "+key()+(store[key()]?" (saved values loaded)":"");
+  },undefined,function(e){S.textContent="item load error: "+el("weap").value;});
+}
+function play(n,btn){document.querySelectorAll("#anim button").forEach(function(b){b.classList.remove("on");});if(btn)btn.classList.add("on");var a=actions[n];if(!a)return;if(cur&&cur!==a)cur.fadeOut(0.2);a.reset().fadeIn(0.2).play();cur=a;}
+window.onerror=function(m,src,l){S.innerHTML='<span style="color:#ffcf5a">JS error: '+m+' (line '+l+')</span>';return false;};
+if(location.protocol==='file:'){
+  document.body.insertAdjacentHTML('beforeend','<div style="position:fixed;inset:0;background:#0f1218;color:#ffcf5a;font:16px Arial;display:flex;align-items:center;justify-content:center;text-align:center;padding:40px">Open this over a local server, not by double-clicking.<br><br>In Terminal:&nbsp; <b style="color:#9fd0ff">cd ~/Downloads/red\\ rising &amp;&amp; python3 -m http.server 8000</b><br><br>then open&nbsp; <b style="color:#9fd0ff">http://localhost:8000/rigged_units/placement_editor.html</b></div>');
+}else if(window.THREE&&THREE.GLTFLoader){
+  try{init();}catch(e){S.innerHTML='<span style="color:#ffcf5a">init failed: '+e.message+'</span>';}
+}else{
+  S.innerHTML='<span style="color:#ffcf5a">three.js did not load — check internet access to cdnjs/unpkg.</span>';
+}
+</script></body></html>

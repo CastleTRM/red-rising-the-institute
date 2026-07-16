@@ -1,0 +1,95 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unit + Weapon viewer</title>
+<style>
+html,body{margin:0;height:100%;background:#12151c;color:#e7e9ef;font-family:Arial,Helvetica,sans-serif;overflow:hidden}
+#c{display:block;width:100vw;height:100vh}
+#p{position:fixed;top:12px;left:12px;background:rgba(10,12,18,.9);border:1px solid #2a3242;border-radius:10px;padding:12px 14px;max-width:270px}
+h1{font:600 15px Georgia,serif;margin:0 0 2px}
+.sub{font-size:11px;color:#8a93a5;margin-bottom:8px;line-height:1.4}
+.lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6f7889;margin:10px 0 3px}
+button{background:#1b2230;color:#e7e9ef;border:1px solid #34405a;border-radius:7px;padding:6px 9px;margin:3px 3px 0 0;cursor:pointer;font-size:12px}
+button.on{background:#3f6fa8;border-color:#5b86bd}
+.hb{width:24px;height:20px;border-radius:5px;border:1px solid #2a3242;padding:0}
+#s{position:fixed;bottom:10px;left:12px;font-size:11px;color:#7f8896;max-width:60vw}
+code{color:#9fd0ff}
+</style></head>
+<body><canvas id="c"></canvas>
+<div id="p">
+  <h1>infantry_male + dual_blades</h1>
+  <div class="sub">Proves the drop-in assembler: weapon mounts on <code>socket_weapon_r</code>, house tint on <code>house_cloth</code>, clips play with the blade in hand.</div>
+  <div class="lbl">Animation</div><div id="btns"></div>
+  <div class="lbl">House tint</div><div id="houses"></div>
+</div>
+<div id="s">loading…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// Loads assets by relative path from this file's location (rigged_units/ -> ../assets/...)
+var BODY_URL="../assets/models/infantry_male.glb";
+var WEAP_URL="../assets/attachments/dual_blades.glb";
+var HOUSES={mars:"#b23b2e",minerva:"#3f6fa8",apollo:"#c8821b",pluto:"#75639b",ceres:"#a98a4f",
+  diana:"#47795a",jupiter:"#7d8896",juno:"#8a5a6e",venus:"#b8788a",vulcan:"#8a4a2e",bacchus:"#6e3a4e",mercury:"#4a8f86"};
+var S=document.getElementById("s");
+var renderer,scene,cam,ctrl,mixer,clock,actions={},cur,cloth=[];
+
+function shortName(n){
+  return n.replace(/^unit_[a-z0-9_]+?_(idle|walk|run|attack_light|death_front)/,"$1")
+          .replace(/_v\d+$/,"").replace("attack_light","attack").replace("death_front","death");
+}
+function init(){
+  var c=document.getElementById("c");
+  renderer=new THREE.WebGLRenderer({canvas:c,antialias:true});
+  renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  renderer.setSize(innerWidth,innerHeight);
+  if('outputEncoding' in renderer) renderer.outputEncoding=THREE.sRGBEncoding;
+  scene=new THREE.Scene(); scene.background=new THREE.Color(0x12151c);
+  cam=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.01,100);
+  cam.position.set(2.4,1.5,2.6);
+  ctrl=new THREE.OrbitControls(cam,renderer.domElement); ctrl.target.set(0,1.0,0); ctrl.update();
+  scene.add(new THREE.HemisphereLight(0xcfe0ff,0x202028,1.05));
+  var k=new THREE.DirectionalLight(0xffffff,1.6); k.position.set(4,7,5); scene.add(k);
+  var g=new THREE.Mesh(new THREE.CircleGeometry(3,48),new THREE.MeshStandardMaterial({color:0x1a1f29,roughness:1}));
+  g.rotation.x=-Math.PI/2; scene.add(g);
+  clock=new THREE.Clock();
+  var L=new THREE.GLTFLoader();
+  L.load(BODY_URL,function(gl){
+    scene.add(gl.scene);
+    mixer=new THREE.AnimationMixer(gl.scene);
+    var sockR=null;
+    gl.scene.traverse(function(o){
+      if(o.name==="socket_weapon_r") sockR=o;
+      if(o.isMesh&&o.material&&o.material.name==="house_cloth"){ o.material=o.material.clone(); cloth.push(o.material); }
+    });
+    L.load(WEAP_URL,function(w){
+      if(sockR){ sockR.add(w.scene); }
+      S.innerHTML=(sockR?"✓ weapon attached to <code>socket_weapon_r</code>":"⚠ socket_weapon_r NOT found")
+        +" · "+gl.animations.length+" clips · "+cloth.length+" tintable mesh(es)";
+    },undefined,function(e){ S.textContent="weapon load error: "+WEAP_URL; });
+    var bt=document.getElementById("btns");
+    gl.animations.forEach(function(cl){
+      var sh=shortName(cl.name);
+      actions[cl.name]=mixer.clipAction(cl);
+      var b=document.createElement("button"); b.textContent=sh;
+      b.onclick=function(){ play(cl.name,b); }; bt.appendChild(b);
+      if(sh==="idle") setTimeout(function(){ play(cl.name,b); },0);
+    });
+    var hb=document.getElementById("houses");
+    Object.keys(HOUSES).forEach(function(h){
+      var b=document.createElement("button"); b.className="hb"; b.style.background=HOUSES[h]; b.title=h;
+      b.onclick=function(){ cloth.forEach(function(m){ m.color=new THREE.Color(HOUSES[h]); m.needsUpdate=true; }); };
+      hb.appendChild(b);
+    });
+  },undefined,function(e){ S.innerHTML="body load error: <code>"+BODY_URL+"</code> — serve this folder over http (see note)"; });
+  addEventListener("resize",function(){ cam.aspect=innerWidth/innerHeight; cam.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+  (function loop(){ requestAnimationFrame(loop); var dt=clock.getDelta(); if(mixer)mixer.update(dt); renderer.render(scene,cam); })();
+}
+function play(n,btn){
+  document.querySelectorAll("#btns button").forEach(function(b){ b.classList.remove("on"); });
+  if(btn) btn.classList.add("on");
+  var a=actions[n]; if(!a) return;
+  if(cur&&cur!==a) cur.fadeOut(0.2);
+  a.reset().fadeIn(0.2).play(); cur=a;
+}
+if(window.THREE&&THREE.GLTFLoader){ init(); } else { S.textContent="three.js failed to load (need internet for the CDN)"; }
+</script></body></html>
