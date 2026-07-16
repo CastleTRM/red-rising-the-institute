@@ -5801,18 +5801,34 @@ function b3Teardown(){
 }
 /* ===== INSTITUTE_3D — animated 3D Spartan foot-soldiers (from PR #2 handoff). Shares scope with the battle code (HOUSES, B, B3, b3H). ===== */
 var INSTITUTE_3D=(function(){
-var mobile=/Mobi|Android|iPhone|iPad/i.test((navigator&&navigator.userAgent)||"");
-var enabled=!mobile, ready=false, loading=false, tmpl=null, clips={}, mixers=[], last=0;
-var FOOT={pike:1,blade:1,conscript:1,captain:1,howler:1,vanguard:1,champion:1};
-var SCALE=7.0, PERUNIT=6, FIELD=36, YAW=0.0;
-function load(){ if(loading||ready||!window.THREE||!THREE.GLTFLoader)return; loading=true; try{ new THREE.GLTFLoader().load("spartan-lite.glb",function(g){ tmpl=g.scene; (g.animations||[]).forEach(function(c){clips[c.name]=c;}); ready=true; },undefined,function(){loading=false;}); }catch(e){loading=false;} }
-function isFoot(t){return enabled&&!!FOOT[t];}
-function tick(){ try{ if(!enabled)return; if(!ready){load();return;} var now=((window.performance&&performance.now)?performance.now():Date.now())/1000; var dt=last?Math.min(0.06,now-last):0; last=now; for(var i=0;i<mixers.length;i++)mixers[i].update(dt); }catch(e){} }
-function make(hid){ if(!ready||!(window.THREE&&THREE.SkeletonUtils))return null; var obj=THREE.SkeletonUtils.clone(tmpl); obj.scale.setScalar(SCALE); obj.traverse(function(o){ if(o.isMesh){o.frustumCulled=false; if(o.material){o.material=o.material.clone(); if(o.material.name&&o.material.name.indexOf("Armor7")>=0){try{o.material.color=new THREE.Color((HOUSES[hid]||HOUSES.neutral).color);}catch(e){}}}}}); var mx=new THREE.AnimationMixer(obj); mixers.push(mx); var acts={}; for(var k in clips){acts[k]=mx.clipAction(clips[k]);} var cur=null; function setState(n){var a=acts[n]||acts.idle; if(!a||a===cur)return; if(cur)cur.fadeOut(0.15); a.reset().fadeIn(0.15).play(); cur=a;} setState("idle"); return {obj:obj,setState:setState,_mx:mx}; }
-function drop(sN){ if(sN&&sN._mx){ var i=mixers.indexOf(sN._mx); if(i>=0)mixers.splice(i,1); } }
-function clearAll(){ mixers.length=0; last=0; }
-function renderUnit(rec,u,show,sinF,cosF){ try{ if(!ready)return false; if(!rec.s3d)rec.s3d=[]; var want=Math.min(show,PERUNIT); var st=u.rout?"death":(u.mv?"march":(((B.t-(u.lastHit||-9))<0.5)?"attack":"idle")); var gy=b3H(u.x,u.y), face=-u.face+YAW; for(var i=0;i<want;i++){ var sN=rec.s3d[i]; if(!sN){ if(mixers.length>=FIELD)break; sN=make(u.hid); if(!sN)break; B3.unitGrp.add(sN.obj); rec.s3d[i]=sN; } var o=u.offs[i]; sN.obj.position.set(u.x-o.x*sinF-o.y*cosF-600, gy, u.y+o.x*cosF-o.y*sinF-340); sN.obj.rotation.y=face; sN.obj.visible=true; sN.setState(st); } for(var j=want;j<rec.s3d.length;j++)rec.s3d[j].obj.visible=false; if(rec.s3d.length>0){ rec.inst.visible=false; if(rec.spr){for(var q=0;q<rec.spr.length;q++)rec.spr[q].visible=false;} return true; } return false; }catch(e){ return false; } }
-return { get enabled(){return enabled;}, set enabled(v){enabled=v;}, get ready(){return ready;}, load:load, tick:tick, make:make, drop:drop, isFoot:isFoot, renderUnit:renderUnit, clearAll:clearAll, cfg:function(o){o=o||{};if(o.scale!=null)SCALE=o.scale;if(o.per!=null)PERUNIT=o.per;if(o.field!=null)FIELD=o.field;if(o.yaw!=null)YAW=o.yaw;} };
+ var mobile=/Mobi|Android|iPhone|iPad/i.test((navigator&&navigator.userAgent)||"");
+ var enabled=!mobile, ready=false, last=0, mixers=[];
+ /* per unit-type kit: body + weapon(socket_weapon_r) + shield(socket_shield_l) + scale mult */
+ var KIT={
+  blade:     {body:"infantry_male", weapon:"gladius",     shield:"scutum",       s:1.0},
+  captain:   {body:"infantry_male", weapon:"gladius",     shield:"round_shield", s:1.0},
+  conscript: {body:"infantry_male", weapon:"spear",       shield:"round_shield", s:1.0},
+  pike:      {body:"infantry_male", weapon:"spear",       shield:"tower_shield", s:1.0},
+  howler:    {body:"infantry_male", weapon:"dual_blades", shield:null,           s:1.0},
+  vanguard:  {body:"giant",         weapon:"warhammer",   shield:null,           s:1.4},
+  champion:  {body:"hero_gold",     weapon:"razor",       shield:null,           s:1.05}
+ };
+ var SCALE=7.0, PERUNIT=6, FIELD=36, YAW=0.0;
+ var bodies={}, bodyClips={}, weaps={}, tmpls={}, bodyLoading={}, weapLoading={}, loader=null;
+ function L(){ return loader||(loader=(window.THREE&&THREE.GLTFLoader)?new THREE.GLTFLoader():null); }
+ function loadBody(id){ if(bodies[id]!==undefined||bodyLoading[id]||!L())return; bodyLoading[id]=true; L().load("assets/models/"+id+".glb",function(g){ bodies[id]=g.scene; bodyClips[id]=(g.animations||[]); if(id==="infantry_male")ready=true; },undefined,function(){ bodies[id]=null; }); }
+ function loadWeap(id){ if(!id||weaps[id]!==undefined||weapLoading[id]||!L())return; weapLoading[id]=true; L().load("assets/attachments/"+id+".glb",function(g){ weaps[id]=g.scene; },undefined,function(){ weaps[id]=null; }); }
+ function load(){ if(!L())return; for(var t in KIT){ var k=KIT[t]; loadBody(k.body); loadWeap(k.weapon); if(k.shield)loadWeap(k.shield); } }
+ function isFoot(t){return enabled&&!!KIT[t];}
+ function attach(root,sock,wid){ if(!wid||!weaps[wid])return; var s=null; root.traverse(function(o){if(o.name===sock)s=o;}); if(s)s.add(weaps[wid].clone(true)); }
+ function template(t){ if(tmpls[t])return tmpls[t]; var k=KIT[t]; if(!k||!bodies[k.body])return null; if(weaps[k.weapon]===undefined)return null; if(k.shield&&weaps[k.shield]===undefined)return null; var b=(THREE.SkeletonUtils?THREE.SkeletonUtils.clone(bodies[k.body]):bodies[k.body].clone(true)); attach(b,"socket_weapon_r",k.weapon); attach(b,"socket_shield_l",k.shield); tmpls[t]={body:k.body,scene:b,s:k.s}; return tmpls[t]; }
+ function pickClip(clips,want){ var order=want==="march"?["walk","run"]:[want]; var i,j; for(i=0;i<order.length;i++)for(j=0;j<clips.length;j++)if(clips[j].name.toLowerCase().indexOf(order[i])>=0)return clips[j]; for(j=0;j<clips.length;j++)if(clips[j].name.toLowerCase().indexOf("idle")>=0)return clips[j]; return clips[0]||null; }
+ function make(hid,type){ if(!ready||!window.THREE)return null; var tp=template(type); if(!tp)return null; var obj=(THREE.SkeletonUtils?THREE.SkeletonUtils.clone(tp.scene):tp.scene.clone(true)); obj.scale.setScalar(SCALE*tp.s); var col=new THREE.Color((HOUSES[hid]||HOUSES.neutral).color); obj.traverse(function(o){ if(o.isMesh){ o.frustumCulled=false; if(o.material&&!Array.isArray(o.material)){ o.material=o.material.clone(); if(o.isSkinnedMesh&&o.material.color){o.material.color.lerp(col,0.30);} } } }); var clips=bodyClips[tp.body]||[]; var mx=new THREE.AnimationMixer(obj); mixers.push(mx); var cache={}, cur=null; function setState(n){ var cl=cache[n]||(cache[n]=pickClip(clips,n)); if(!cl)return; var a=mx.clipAction(cl); if(a===cur)return; if(cur)cur.fadeOut(0.15); a.reset().fadeIn(0.15).play(); cur=a; } setState("idle"); return {obj:obj,setState:setState,_mx:mx}; }
+ function drop(sN){ if(sN&&sN._mx){var i=mixers.indexOf(sN._mx);if(i>=0)mixers.splice(i,1);} }
+ function tick(){ try{ if(!enabled)return; if(!ready){load();return;} var now=((window.performance&&performance.now)?performance.now():Date.now())/1000; var dt=last?Math.min(0.06,now-last):0; last=now; for(var i=0;i<mixers.length;i++)mixers[i].update(dt); }catch(e){} }
+ function clearAll(){ mixers.length=0; last=0; tmpls={}; }
+ function renderUnit(rec,u,show,sinF,cosF){ try{ if(!ready)return false; if(!rec.s3d)rec.s3d=[]; var want=Math.min(show,PERUNIT); var st=u.rout?"death":(u.mv?"march":(((B.t-(u.lastHit||-9))<0.5)?"attack":"idle")); var gy=b3H(u.x,u.y), face=-u.face+YAW; for(var i=0;i<want;i++){ var sN=rec.s3d[i]; if(!sN){ if(mixers.length>=FIELD)break; sN=make(u.hid,u.type); if(!sN)break; B3.unitGrp.add(sN.obj); rec.s3d[i]=sN; } var o=u.offs[i]; sN.obj.position.set(u.x-o.x*sinF-o.y*cosF-600, gy, u.y+o.x*cosF-o.y*sinF-340); sN.obj.rotation.y=face; sN.obj.visible=true; sN.setState(st); } for(var j=want;j<rec.s3d.length;j++)rec.s3d[j].obj.visible=false; if(rec.s3d.length>0){ rec.inst.visible=false; if(rec.spr){for(var q=0;q<rec.spr.length;q++)rec.spr[q].visible=false;} return true; } return false; }catch(e){ return false; } }
+ return { get enabled(){return enabled;}, set enabled(v){enabled=v;}, get ready(){return ready;}, load:load, tick:tick, make:make, drop:drop, isFoot:isFoot, renderUnit:renderUnit, clearAll:clearAll, cfg:function(o){o=o||{};if(o.scale!=null)SCALE=o.scale;if(o.per!=null)PERUNIT=o.per;if(o.field!=null)FIELD=o.field;if(o.yaw!=null)YAW=o.yaw;} };
 })();
 function b3Frame(){if(window.INSTITUTE_3D)INSTITUTE_3D.tick();
  if(!B3.ready)return;
