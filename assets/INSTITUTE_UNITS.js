@@ -57,7 +57,7 @@ var INSTITUTE_UNITS=(function(){
       var p=PLACEMENTS[bodyId+"|"+assetId+"|"+socketName];
       if(p){
         adj.rotation.set(p.rot[0]*Math.PI/180, p.rot[1]*Math.PI/180, p.rot[2]*Math.PI/180);
-        adj.position.set(p.pos[0], p.pos[1], p.pos[2]);
+        adj.position.set(p.pos[0]*100, p.pos[1]*100, p.pos[2]*100); // metres -> socket-local (0.01 armature scale)
         adj.scale.set(p.scale, p.scale, p.scale);
       }
       adj.add(g.scene); socket.add(adj);
