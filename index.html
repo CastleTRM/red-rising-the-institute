@@ -3684,7 +3684,7 @@ try{ if(window.THREE&&THREE.GLTFLoader)SHIP3D.start(); }catch(e){}   /* prefetch
    when ready and falls back to the box castle until then. ===== */
 var BLDG3D=(function(){
  var MAP={ keep:'keep', tower:'tower', gatehouse:'gatehouse', wall:'wall_segment' };
- var SIZE={ keep:32, tower:11, gatehouse:13, wall:16 };   /* target longest dim in valley units */
+ var SIZE={ keep:38, tower:12, gatehouse:15, wall:18 };   /* target longest dim in valley units */
  var tpl={}, loader=null, started=false;
  function start(){ if(started||typeof THREE==='undefined'||!THREE.GLTFLoader)return; started=true;
   loader=new THREE.GLTFLoader();
@@ -3692,6 +3692,12 @@ var BLDG3D=(function(){
    loader.load('assets/buildings/'+MAP[type]+'.glb',function(g){
     try{
      var root=g.scene;
+     /* the valley is lit for MeshLambert; PBR hulls render near-black here, so relight the stone as Lambert (keeping the baked albedo) */
+     root.traverse(function(o){ if(o.isMesh&&o.material){
+      var arr=Array.isArray(o.material)?o.material:[o.material];
+      var conv=arr.map(function(m){ return new THREE.MeshLambertMaterial({ map:m.map||null, color:m.map?0xffffff:(m.color?m.color.clone():new THREE.Color(0x9a9488)), emissive:new THREE.Color(0x3a352b) }); });
+      o.material=Array.isArray(o.material)?conv:conv[0];
+     } });
      var b=new THREE.Box3().setFromObject(root),size=new THREE.Vector3();
      b.getSize(size);
      var ctr=new THREE.Vector3(); b.getCenter(ctr);
