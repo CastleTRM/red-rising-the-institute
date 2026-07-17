@@ -3629,6 +3629,105 @@ let FBUI={raf:null,sel:new Set(),fx:[],resolve:null,done:false,s:1,ox:0,oy:0,las
 /* ============ 3D VOID BATTLE (Three.js) ============
    The 2D sim (fbSim) drives everything; this renders it as real ships in space. */
 var FB3={ready:false,ren:null,scene:null,cam:null,ships:null,shipGrp:null,beamA:null,beamB:null,stars:null,parts:[],_cv:null,K:0.08};
+/* ===== SHIP3D (P4) — real textured GLB hulls for the fleet battle. Loads async; fb3BuildShip
+   falls back to the primitive ships until each template is ready, so the battle never blocks. ===== */
+var SHIP3D=(function(){
+ var MAP={ flag:'moon_dreadnought', destroyer:'wardog_dropship', ripwing:'ripwing', leech:'leechcraft', torch:'torchship' };
+ /* target hull LENGTH in fleet units, matched to the old primitive footprints */
+ var LEN={ flag:13.0, destroyer:8.5, ripwing:3.2, leech:3.0, torch:6.4 };
+ /* extra yaw (radians) so each hull's nose points +X (the direction ships advance). Tunable after viewing. */
+ var YAW={ flag:0, destroyer:0, ripwing:0, leech:0, torch:0 };
+ var tpl={}, loader=null, started=false;
+ function start(){ if(started||typeof THREE==='undefined'||!THREE.GLTFLoader)return; started=true;
+  loader=new THREE.GLTFLoader();
+  Object.keys(MAP).forEach(function(type){
+   loader.load('assets/ships/'+MAP[type]+'.glb',function(g){
+    try{
+     var root=g.scene;
+     var box=new THREE.Box3().setFromObject(root),size=new THREE.Vector3(),ctr=new THREE.Vector3();
+     box.getSize(size); box.getCenter(ctr);
+     root.position.sub(ctr);                       /* centre the hull at the origin */
+     var wrap=new THREE.Group(); wrap.add(root);
+     if(size.z>size.x) wrap.rotation.y=Math.PI/2;  /* z-long hull -> x-long (nose down +X) */
+     wrap.rotation.y+=YAW[type]||0;
+     var longest=Math.max(size.x,size.y,size.z)||1;
+     wrap.scale.setScalar(LEN[type]/longest);
+     tpl[type]={grp:wrap, half:LEN[type]/2};
+    }catch(e){ if(typeof soft==='function')soft(e); }
+   },undefined,function(){});
+  });
+ }
+ function ready(type){ return !!tpl[type]; }
+ function build(type,side){
+  var t=tpl[type]; if(!t)return null;
+  var g=new THREE.Group();
+  var hull=t.grp.clone(true);
+  var col=new THREE.Color(side==='A'?0x2f6ea8:0xa8382f);
+  hull.traverse(function(o){ if(o.isMesh&&o.material){
+   var arr=Array.isArray(o.material)?o.material:[o.material];
+   var cl=arr.map(function(m){ var c=m.clone(); if(c.emissive){ c.emissive.copy(col); if('emissiveIntensity' in c)c.emissiveIntensity=0.4; } return c; });
+   o.material=Array.isArray(o.material)?cl:cl[0];
+  } });
+  g.add(hull);
+  var half=t.half, er=Math.max(0.3,half*0.11);
+  function eng(x,z){ var m=new THREE.Mesh(new THREE.SphereGeometry(er,10,10),new THREE.MeshBasicMaterial({color:0xffb15a,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending})); m.position.set(x,0,z); g.add(m); (g.userData.eng=g.userData.eng||[]).push(m); }
+  eng(-half*0.96, half*0.16); eng(-half*0.96,-half*0.16);
+  if(type==='leech'){ var drill=new THREE.Mesh(new THREE.ConeGeometry(er*1.15,half*0.55,10),new THREE.MeshBasicMaterial({color:0xff7a2a,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending})); drill.rotation.z=-Math.PI/2; drill.position.set(half*0.98,0,0); drill.visible=false; g.add(drill); g.userData.drill=drill; }
+  /* a bright team strip along the spine so side reads instantly from the battle camera */
+  var acc=new THREE.Mesh(new THREE.BoxGeometry(half*1.05,er*0.5,er*0.5),new THREE.MeshBasicMaterial({color:side==='A'?0x59b4ff:0xff6250})); acc.position.set(0,half*0.2,0); g.add(acc);
+  return g;
+ }
+ return { start:start, ready:ready, build:build };
+})();
+try{ if(window.THREE&&THREE.GLTFLoader)SHIP3D.start(); }catch(e){}   /* prefetch ship hulls at load */
+/* ===== BLDG3D (P4) — real GLB castle keeps on the 3D valley. Prefetched; init3d uses the model
+   when ready and falls back to the box castle until then. ===== */
+var BLDG3D=(function(){
+ var MAP={ keep:'keep', tower:'tower', gatehouse:'gatehouse', wall:'wall_segment' };
+ var SIZE={ keep:38, tower:12, gatehouse:15, wall:18 };   /* target longest dim in valley units */
+ var tpl={}, loader=null, started=false;
+ function start(){ if(started||typeof THREE==='undefined'||!THREE.GLTFLoader)return; started=true;
+  loader=new THREE.GLTFLoader();
+  Object.keys(MAP).forEach(function(type){
+   loader.load('assets/buildings/'+MAP[type]+'.glb',function(g){
+    try{
+     var root=g.scene;
+     /* the valley is lit for MeshLambert; PBR hulls render near-black here, so relight the stone as Lambert (keeping the baked albedo) */
+     root.traverse(function(o){ if(o.isMesh&&o.material){
+      var arr=Array.isArray(o.material)?o.material:[o.material];
+      var conv=arr.map(function(m){ return new THREE.MeshLambertMaterial({ map:m.map||null, color:m.map?0xffffff:(m.color?m.color.clone():new THREE.Color(0x9a9488)), emissive:new THREE.Color(0x3a352b) }); });
+      o.material=Array.isArray(o.material)?conv:conv[0];
+     } });
+     var b=new THREE.Box3().setFromObject(root),size=new THREE.Vector3();
+     b.getSize(size);
+     var ctr=new THREE.Vector3(); b.getCenter(ctr);
+     root.position.x-=ctr.x; root.position.z-=ctr.z; root.position.y-=b.min.y;  /* centre X/Z, base at y=0 */
+     var wrap=new THREE.Group(); wrap.add(root);
+     wrap.scale.setScalar(SIZE[type]/(Math.max(size.x,size.y,size.z)||1));
+     tpl[type]={grp:wrap};
+     if(type==='keep'&&typeof m3UpgradeCastles==='function')m3UpgradeCastles();  /* swap any box castles already built */
+    }catch(e){ if(typeof soft==='function')soft(e); }
+   },undefined,function(){});
+  });
+ }
+ function ready(type){ return !!tpl[type]; }
+ function make(type){ var t=tpl[type]; return t?t.grp.clone(true):null; }
+ return { start:start, ready:ready, make:make };
+})();
+try{ if(window.THREE&&THREE.GLTFLoader)BLDG3D.start(); }catch(e){}   /* prefetch castle models at load */
+/* Swap one box castle for the real keep model (idempotent). Called at build time and again when the GLB lands. */
+function m3CastleModel(keep){
+ if(!keep||keep.userData._glb||!window.BLDG3D||!BLDG3D.ready('keep'))return;
+ keep.userData._glb=true;
+ keep.material.visible=false;                                   /* keep is still pickable (object.visible stays true) */
+ var bx=keep.userData._boxes||[]; for(var i=0;i<bx.length;i++)bx[i].material.visible=false;
+ var cx=keep.userData._cx, cz=keep.userData._cz, ky=keep.userData._ky, grp=keep.userData._grp;
+ var gk=BLDG3D.make('keep'); if(!gk){keep.userData._glb=false;return;}
+ gk.position.set(cx,ky,cz);
+ gk.userData.gx=cx; gk.userData.gz=cz; gk.userData.lift=ky-terrH(cx,cz);
+ grp.add(gk); M3.standing=M3.standing||[]; M3.standing.push(gk);
+}
+function m3UpgradeCastles(){ if(M3&&M3.pickCastle){ for(var i=0;i<M3.pickCastle.length;i++)m3CastleModel(M3.pickCastle[i]); } }
 /* Procedural hull-plating skin, tinted with the house band. Ships are re-liveried on capture. */
 function fb3SkinTex(side){ FB3._skin=FB3._skin||{}; if(FB3._skin[side])return FB3._skin[side];
  var c=document.createElement('canvas'); c.width=256;c.height=128; var g=c.getContext('2d');
@@ -3642,6 +3741,7 @@ function fb3SkinTex(side){ FB3._skin=FB3._skin||{}; if(FB3._skin[side])return FB
 }
 function fb3HullMat(side){ return new THREE.MeshPhongMaterial({map:fb3SkinTex(side),color:0xe4e9ef,shininess:30,specular:0x263242}); }
 function fb3BuildShip(type,side){
+ if(window.SHIP3D){ SHIP3D.start(); if(SHIP3D.ready(type)){ var gg=SHIP3D.build(type,side); if(gg)return gg; } }
  var g=new THREE.Group();
  var hullMat=fb3HullMat(side);
  var accMat=new THREE.MeshBasicMaterial({color:side==='A'?0x59b4ff:0xff6250});
@@ -6434,8 +6534,12 @@ function init3d(){
    const keep=put(new THREE.BoxGeometry(22,20,22),mKeep,cx,h+18,cz);
    keep.userData.pickId=d.id;
    M3.pickCastle=M3.pickCastle||[];M3.pickCastle.push(keep);
-   for(const off of[[-9,-9],[9,-9],[-9,9],[9,9]])put(new THREE.BoxGeometry(6,7,6),mTow,cx+off[0],h+31,cz+off[1]);
-   put(new THREE.BoxGeometry(6,9,2),mGate,cx,h+12.5,cz+11.2);
+   const _cboxes=[];
+   for(const off of[[-9,-9],[9,-9],[-9,9],[9,9]])_cboxes.push(put(new THREE.BoxGeometry(6,7,6),mTow,cx+off[0],h+31,cz+off[1]));
+   _cboxes.push(put(new THREE.BoxGeometry(6,9,2),mGate,cx,h+12.5,cz+11.2));
+   /* stash the swap context so the box castle can become the real keep model the moment it loads */
+   keep.userData._cx=cx; keep.userData._cz=cz; keep.userData._ky=h+10; keep.userData._grp=grp; keep.userData._boxes=_cboxes;
+   m3CastleModel(keep);
    const fp=new THREE.Group();
    const csig=m3Signum(d.castleOf,22);
    fp.add(csig);
