@@ -3680,6 +3680,34 @@ var SHIP3D=(function(){
  return { start:start, ready:ready, build:build };
 })();
 try{ if(window.THREE&&THREE.GLTFLoader)SHIP3D.start(); }catch(e){}   /* prefetch ship hulls at load */
+/* ===== BLDG3D (P4) — real GLB castle keeps on the 3D valley. Prefetched; init3d uses the model
+   when ready and falls back to the box castle until then. ===== */
+var BLDG3D=(function(){
+ var MAP={ keep:'keep', tower:'tower', gatehouse:'gatehouse', wall:'wall_segment' };
+ var SIZE={ keep:32, tower:11, gatehouse:13, wall:16 };   /* target longest dim in valley units */
+ var tpl={}, loader=null, started=false;
+ function start(){ if(started||typeof THREE==='undefined'||!THREE.GLTFLoader)return; started=true;
+  loader=new THREE.GLTFLoader();
+  Object.keys(MAP).forEach(function(type){
+   loader.load('assets/buildings/'+MAP[type]+'.glb',function(g){
+    try{
+     var root=g.scene;
+     var b=new THREE.Box3().setFromObject(root),size=new THREE.Vector3();
+     b.getSize(size);
+     var ctr=new THREE.Vector3(); b.getCenter(ctr);
+     root.position.x-=ctr.x; root.position.z-=ctr.z; root.position.y-=b.min.y;  /* centre X/Z, base at y=0 */
+     var wrap=new THREE.Group(); wrap.add(root);
+     wrap.scale.setScalar(SIZE[type]/(Math.max(size.x,size.y,size.z)||1));
+     tpl[type]={grp:wrap};
+    }catch(e){ if(typeof soft==='function')soft(e); }
+   },undefined,function(){});
+  });
+ }
+ function ready(type){ return !!tpl[type]; }
+ function make(type){ var t=tpl[type]; return t?t.grp.clone(true):null; }
+ return { start:start, ready:ready, make:make };
+})();
+try{ if(window.THREE&&THREE.GLTFLoader)BLDG3D.start(); }catch(e){}   /* prefetch castle models at load */
 /* Procedural hull-plating skin, tinted with the house band. Ships are re-liveried on capture. */
 function fb3SkinTex(side){ FB3._skin=FB3._skin||{}; if(FB3._skin[side])return FB3._skin[side];
  var c=document.createElement('canvas'); c.width=256;c.height=128; var g=c.getContext('2d');
@@ -6486,8 +6514,16 @@ function init3d(){
    const keep=put(new THREE.BoxGeometry(22,20,22),mKeep,cx,h+18,cz);
    keep.userData.pickId=d.id;
    M3.pickCastle=M3.pickCastle||[];M3.pickCastle.push(keep);
-   for(const off of[[-9,-9],[9,-9],[-9,9],[9,9]])put(new THREE.BoxGeometry(6,7,6),mTow,cx+off[0],h+31,cz+off[1]);
-   put(new THREE.BoxGeometry(6,9,2),mGate,cx,h+12.5,cz+11.2);
+   if(window.BLDG3D&&BLDG3D.ready('keep')){
+    keep.material.visible=false;                    /* stays pickable (object.visible=true), box hidden */
+    const gk=BLDG3D.make('keep'); const ky=h+10;    /* stand on top of the mound */
+    gk.position.set(cx,ky,cz);
+    gk.userData.gx=cx; gk.userData.gz=cz; gk.userData.lift=ky-terrH(cx,cz);
+    grp.add(gk); M3.standing=M3.standing||[]; M3.standing.push(gk);
+   }else{
+    for(const off of[[-9,-9],[9,-9],[-9,9],[9,9]])put(new THREE.BoxGeometry(6,7,6),mTow,cx+off[0],h+31,cz+off[1]);
+    put(new THREE.BoxGeometry(6,9,2),mGate,cx,h+12.5,cz+11.2);
+   }
    const fp=new THREE.Group();
    const csig=m3Signum(d.castleOf,22);
    fp.add(csig);
