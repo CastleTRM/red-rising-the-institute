@@ -3699,6 +3699,7 @@ var BLDG3D=(function(){
      var wrap=new THREE.Group(); wrap.add(root);
      wrap.scale.setScalar(SIZE[type]/(Math.max(size.x,size.y,size.z)||1));
      tpl[type]={grp:wrap};
+     if(type==='keep'&&typeof m3UpgradeCastles==='function')m3UpgradeCastles();  /* swap any box castles already built */
     }catch(e){ if(typeof soft==='function')soft(e); }
    },undefined,function(){});
   });
@@ -3708,6 +3709,19 @@ var BLDG3D=(function(){
  return { start:start, ready:ready, make:make };
 })();
 try{ if(window.THREE&&THREE.GLTFLoader)BLDG3D.start(); }catch(e){}   /* prefetch castle models at load */
+/* Swap one box castle for the real keep model (idempotent). Called at build time and again when the GLB lands. */
+function m3CastleModel(keep){
+ if(!keep||keep.userData._glb||!window.BLDG3D||!BLDG3D.ready('keep'))return;
+ keep.userData._glb=true;
+ keep.material.visible=false;                                   /* keep is still pickable (object.visible stays true) */
+ var bx=keep.userData._boxes||[]; for(var i=0;i<bx.length;i++)bx[i].material.visible=false;
+ var cx=keep.userData._cx, cz=keep.userData._cz, ky=keep.userData._ky, grp=keep.userData._grp;
+ var gk=BLDG3D.make('keep'); if(!gk){keep.userData._glb=false;return;}
+ gk.position.set(cx,ky,cz);
+ gk.userData.gx=cx; gk.userData.gz=cz; gk.userData.lift=ky-terrH(cx,cz);
+ grp.add(gk); M3.standing=M3.standing||[]; M3.standing.push(gk);
+}
+function m3UpgradeCastles(){ if(M3&&M3.pickCastle){ for(var i=0;i<M3.pickCastle.length;i++)m3CastleModel(M3.pickCastle[i]); } }
 /* Procedural hull-plating skin, tinted with the house band. Ships are re-liveried on capture. */
 function fb3SkinTex(side){ FB3._skin=FB3._skin||{}; if(FB3._skin[side])return FB3._skin[side];
  var c=document.createElement('canvas'); c.width=256;c.height=128; var g=c.getContext('2d');
@@ -6514,16 +6528,12 @@ function init3d(){
    const keep=put(new THREE.BoxGeometry(22,20,22),mKeep,cx,h+18,cz);
    keep.userData.pickId=d.id;
    M3.pickCastle=M3.pickCastle||[];M3.pickCastle.push(keep);
-   if(window.BLDG3D&&BLDG3D.ready('keep')){
-    keep.material.visible=false;                    /* stays pickable (object.visible=true), box hidden */
-    const gk=BLDG3D.make('keep'); const ky=h+10;    /* stand on top of the mound */
-    gk.position.set(cx,ky,cz);
-    gk.userData.gx=cx; gk.userData.gz=cz; gk.userData.lift=ky-terrH(cx,cz);
-    grp.add(gk); M3.standing=M3.standing||[]; M3.standing.push(gk);
-   }else{
-    for(const off of[[-9,-9],[9,-9],[-9,9],[9,9]])put(new THREE.BoxGeometry(6,7,6),mTow,cx+off[0],h+31,cz+off[1]);
-    put(new THREE.BoxGeometry(6,9,2),mGate,cx,h+12.5,cz+11.2);
-   }
+   const _cboxes=[];
+   for(const off of[[-9,-9],[9,-9],[-9,9],[9,9]])_cboxes.push(put(new THREE.BoxGeometry(6,7,6),mTow,cx+off[0],h+31,cz+off[1]));
+   _cboxes.push(put(new THREE.BoxGeometry(6,9,2),mGate,cx,h+12.5,cz+11.2));
+   /* stash the swap context so the box castle can become the real keep model the moment it loads */
+   keep.userData._cx=cx; keep.userData._cz=cz; keep.userData._ky=h+10; keep.userData._grp=grp; keep.userData._boxes=_cboxes;
+   m3CastleModel(keep);
    const fp=new THREE.Group();
    const csig=m3Signum(d.castleOf,22);
    fp.add(csig);
