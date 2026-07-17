@@ -3683,8 +3683,8 @@ try{ if(window.THREE&&THREE.GLTFLoader)SHIP3D.start(); }catch(e){}   /* prefetch
 /* ===== BLDG3D (P4) — real GLB castle keeps on the 3D valley. Prefetched; init3d uses the model
    when ready and falls back to the box castle until then. ===== */
 var BLDG3D=(function(){
- var MAP={ keep:'keep', tower:'tower', gatehouse:'gatehouse', wall:'wall_segment' };
- var SIZE={ keep:38, tower:12, gatehouse:15, wall:18 };   /* target longest dim in valley units */
+ var MAP={ keep:'keep', tower:'tower', gatehouse:'gatehouse', wall:'wall_segment', barracks:'barracks', forge:'forge', throne:'throne' };
+ var SIZE={ keep:38, tower:12, gatehouse:15, wall:18, barracks:16, forge:14, throne:9 };   /* target longest dim in valley units */
  var tpl={}, loader=null, started=false;
  function start(){ if(started||typeof THREE==='undefined'||!THREE.GLTFLoader)return; started=true;
   loader=new THREE.GLTFLoader();
@@ -3703,16 +3703,19 @@ var BLDG3D=(function(){
      var ctr=new THREE.Vector3(); b.getCenter(ctr);
      root.position.x-=ctr.x; root.position.z-=ctr.z; root.position.y-=b.min.y;  /* centre X/Z, base at y=0 */
      var wrap=new THREE.Group(); wrap.add(root);
-     wrap.scale.setScalar(SIZE[type]/(Math.max(size.x,size.y,size.z)||1));
-     tpl[type]={grp:wrap};
+     var sc=SIZE[type]/(Math.max(size.x,size.y,size.z)||1);
+     wrap.scale.setScalar(sc);
+     tpl[type]={grp:wrap, run:Math.max(size.x,size.z)*sc, ht:size.y*sc, runAxisX:(size.x>=size.z)};
      if(type==='keep'&&typeof m3UpgradeCastles==='function')m3UpgradeCastles();  /* swap any box castles already built */
+     if(type!=='keep'&&type!=='tower'&&type!=='gatehouse'&&typeof m3UpgradeBld==='function')m3UpgradeBld();  /* walls + constructed-building models */
     }catch(e){ if(typeof soft==='function')soft(e); }
    },undefined,function(){});
   });
  }
  function ready(type){ return !!tpl[type]; }
  function make(type){ var t=tpl[type]; return t?t.grp.clone(true):null; }
- return { start:start, ready:ready, make:make };
+ function info(type){ return tpl[type]||null; }
+ return { start:start, ready:ready, make:make, info:info };
 })();
 try{ if(window.THREE&&THREE.GLTFLoader)BLDG3D.start(); }catch(e){}   /* prefetch castle models at load */
 /* Swap one box castle for the real keep model (idempotent). Called at build time and again when the GLB lands. */
@@ -3728,6 +3731,48 @@ function m3CastleModel(keep){
  grp.add(gk); M3.standing=M3.standing||[]; M3.standing.push(gk);
 }
 function m3UpgradeCastles(){ if(M3&&M3.pickCastle){ for(var i=0;i<M3.pickCastle.length;i++)m3CastleModel(M3.pickCastle[i]); } }
+/* A wall run box -> a row of tiled wall_segment models (child of the box, so it inherits the ring's visibility). */
+function m3WallModel(box){
+ if(!box||box.userData._wallDone||!window.BLDG3D||!BLDG3D.ready('wall'))return;
+ var t=BLDG3D.info('wall'); if(!t||!t.run){return;}
+ box.userData._wallDone=true;
+ box.material=box.material.clone(); box.material.visible=false;   /* hide the placeholder box, keep its transform/visibility */
+ var w=box.userData._wall, len=w.len, natLen=t.run;
+ var n=Math.max(1,Math.round(len/natLen)), segLen=len/n, k=segLen/natLen;
+ var row=new THREE.Group();
+ for(var i=0;i<n;i++){ var g=BLDG3D.make('wall'); if(!g)continue;
+  if(t.runAxisX){ g.scale.x*=k; } else { g.scale.z*=k; g.rotation.y+=Math.PI/2; }   /* stretch along the run, aligned to row-local X */
+  g.position.x=-len/2+segLen*(i+0.5); row.add(g); }
+ row.rotation.y=w.yaw||0; row.position.y=-w.ht/2;    /* box centre sits at h+ht/2; drop the wall base to the ground */
+ box.add(row);
+}
+/* A hidden slot box -> its constructed-building model (child of the box, inherits the slot's toggled visibility). */
+function m3BldModel(box){
+ if(!box||box.userData._bldDone||!window.BLDG3D||!BLDG3D.ready(box.userData._glbType))return;
+ box.userData._bldDone=true;
+ box.material=box.material.clone(); box.material.visible=false;
+ var g=BLDG3D.make(box.userData._glbType); if(!g){box.userData._bldDone=false;return;}
+ g.position.y=-box.userData._halfH;    /* base to the ground (box centre is _halfH above terrain) */
+ box.add(g);
+}
+function m3UpgradeBld(){   /* only touch what is actually on screen — hidden slots stay lazy */
+ if(M3.wallSegs){ for(var i=0;i<M3.wallSegs.length;i++){ var wb=M3.wallSegs[i]; if(wb.parent&&wb.parent.visible)m3WallModel(wb); } }
+ if(M3.bldModels){ for(var id in M3.bldModels){ var bm=M3.bldModels[id]; for(var k in bm){ var s=bm[k]; if(s&&s.visible)m3BldModel(s); } } }
+}
+/* Set a castle's wall rings from its level, building the wall models the first time a ring is shown. */
+function m3SetWalls(id,wl){
+ var rings=M3.walls3[id]; if(!rings)return;
+ for(var i=0;i<rings.length;i++){ var on=i<wl; rings[i].visible=on;
+  if(on&&!rings[i].userData._wbuilt){ rings[i].userData._wbuilt=true; rings[i].traverse(function(o){ if(o.userData&&o.userData._wall)m3WallModel(o); }); } }
+}
+/* Show/hide a castle's constructed-building models from its bld state (throne = the player's held seat). */
+function m3BldVis(id,t){
+ var bm=M3.bldModels&&M3.bldModels[id]; if(!bm)return; var b=(t&&t.bld)||{};
+ var set=function(slot,on){ if(!slot)return; if(on&&!slot.userData._bldDone)m3BldModel(slot); slot.visible=!!on; };
+ set(bm.barracks,b.barracks);
+ set(bm.siege,b.siege);
+ set(bm.throne,(typeof G!=='undefined'&&G&&t.owner===G.player&&id===playerCastle()));
+}
 /* Procedural hull-plating skin, tinted with the house band. Ships are re-liveried on capture. */
 function fb3SkinTex(side){ FB3._skin=FB3._skin||{}; if(FB3._skin[side])return FB3._skin[side];
  var c=document.createElement('canvas'); c.width=256;c.height=128; var g=c.getContext('2d');
@@ -6344,7 +6389,7 @@ function m3DragPan(dx,dy,w,h){ if(!M3)return;
  m3Pan(wx*ca - wz*sa, -wx*sa - wz*ca); }
 
 const M3={on:false,ready:false,raf:null,az:0.55,pol:0.82,rad:2050,clock:0,hovId:null,
- tiles:{},groups:{},flags:{},walls3:{},labels:{},borders:{},fwCache:{},pick:[],ptrs:new Map(),pinchD:0,downPt:null,tgt:null,ray:null,ndc:null,V:null,ren:null,cam:null,scene:null};
+ tiles:{},groups:{},flags:{},walls3:{},bldModels:{},labels:{},borders:{},fwCache:{},pick:[],ptrs:new Map(),pinchD:0,downPt:null,tgt:null,ray:null,ndc:null,V:null,ren:null,cam:null,scene:null};
 /* What each terrain USED to stand at, when the lands were extruded boxes. The valley is
    a landscape now and its height comes from the heightmap, but these figures are still
    the honest ranking of the ground and are kept for reference.                        */
@@ -6548,14 +6593,30 @@ function init3d(){
    M3.standing=M3.standing||[]; M3.standing.push(fp);
    grp.add(fp);
    M3.flags[d.id]={pivot:fp,mat:csig.userData.vex.material,sig:csig,hid:d.castleOf};
-   const rings=[];
+   const rings=[]; M3.wallSegs=M3.wallSegs||[];
    for(let wv=0;wv<2;wv++){
     const rg=new THREE.Group();
     const sz=46+wv*14,ht=8+wv*3;
-    for(const seg of[[0,-sz/2,sz,4],[0,sz/2,sz,4],[-sz/2,0,4,sz],[sz/2,0,4,sz]])m3Add(rg,new THREE.BoxGeometry(seg[2],ht,seg[3]),0x3a4052,cx+seg[0],h+ht/2,cz+seg[1]);
+    for(const seg of[[0,-sz/2,sz,4],[0,sz/2,sz,4],[-sz/2,0,4,sz],[sz/2,0,4,sz]]){
+     const wbox=m3Add(rg,new THREE.BoxGeometry(seg[2],ht,seg[3]),0x3a4052,cx+seg[0],h+ht/2,cz+seg[1]);
+     wbox.userData._wall={len:Math.max(seg[2],seg[3]),ht:ht,yaw:seg[2]>=seg[3]?0:Math.PI/2};   /* stone wall_segment models built lazily when shown */
+     M3.wallSegs.push(wbox);
+    }
     rg.visible=false;grp.add(rg);rings.push(rg);
    }
    M3.walls3[d.id]=rings;
+   /* constructed-building slots — hidden until built; the GLB is created the first time it is shown (see m3BldVis) */
+   const slot=(glbType,ox,oz,size)=>{
+    const hh=size*0.35;
+    const b=new THREE.Mesh(new THREE.BoxGeometry(size*0.8,size*0.7,size*0.8),
+     skin(new THREE.MeshLambertMaterial({color:glbType==='throne'?0x8d897c:0x6b5a3a}),'casStone',size,size));
+    b.position.set(cx+ox,h+hh,cz+oz); b.visible=false;
+    b.userData.gx=cx+ox; b.userData.gz=cz+oz; b.userData.lift=(h+hh)-terrH(cx+ox,cz+oz);
+    b.userData._glbType=glbType; b.userData._halfH=hh;
+    grp.add(b); M3.standing=M3.standing||[]; M3.standing.push(b);
+    return b;
+   };
+   M3.bldModels[d.id]={ barracks:slot('barracks',-24,20,15), siege:slot('forge',24,20,14), throne:slot('throne',0,-22,10) };
   }
   M3.scene.add(grp);
   M3.tiles[d.id]=null;M3.groups[d.id]=grp;
@@ -7177,7 +7238,8 @@ function m3Dyn(){
       F.mat.needsUpdate=true;
      } }
    const wl=(t.bld&&t.bld.walls)||0;
-   M3.walls3[d.id].forEach((rg,i)=>{rg.visible=i<wl;});
+   m3SetWalls(d.id,wl);
+   m3BldVis(d.id,t);
   }
   if(M3.borders[d.id])M3.borders[d.id].color.set(HOUSES[t.owner].color);
   const fc=M3.fwCache[d.id]||null;
@@ -7199,7 +7261,7 @@ function m3Dyn(){
   if(grp){
    if(fog==='dark'&&!grp.__dark){ grp.__dark=true; grp.children.forEach(c=>{ if(c!==tm)c.visible=false; }); }
    else if(fog!=='dark'&&grp.__dark){ grp.__dark=false; grp.children.forEach(c=>{ c.visible=true; });
-    if(d.castleOf&&M3.walls3[d.id]){const wl2=(t.bld&&t.bld.walls)||0;M3.walls3[d.id].forEach((rg,i)=>{rg.visible=i<wl2;});}
+    if(d.castleOf&&M3.walls3[d.id]){const wl2=(t.bld&&t.bld.walls)||0;m3SetWalls(d.id,wl2);m3BldVis(d.id,t);}
    }
    if(fog!=='dark'&&L&&L.spr)L.spr.visible=showForce;
   }
